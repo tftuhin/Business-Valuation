@@ -23,7 +23,7 @@ export default function ApiKeyModal({
     perplexity: ''
   });
   const [models, setModels] = useState({
-    gemini: 'gemini-2.5-flash',
+    gemini: 'gemini-3.8-flash',
     openai: 'gpt-4o',
     claude: 'claude-3-7-sonnet-20250219',
     grok: 'grok-2-latest',
@@ -43,7 +43,11 @@ export default function ApiKeyModal({
         setKeys(prev => ({ ...prev, ...aiSettings.keys }));
       }
       if (aiSettings.models) {
-        setModels(prev => ({ ...prev, ...aiSettings.models }));
+        const cleanModels = { ...aiSettings.models };
+        if (!cleanModels.gemini || cleanModels.gemini.includes('2.5')) {
+          cleanModels.gemini = 'gemini-3.8-flash';
+        }
+        setModels(prev => ({ ...prev, ...cleanModels }));
       }
     }
   }, [aiSettings, isOpen]);
@@ -122,10 +126,14 @@ export default function ApiKeyModal({
   };
 
   const handleSave = () => {
+    const cleanModels = {
+      ...models,
+      gemini: (!models.gemini || models.gemini.includes('2.5')) ? 'gemini-3.8-flash' : models.gemini
+    };
     onSaveSettings({
       activeProvider: activeProviderId,
       keys,
-      models
+      models: cleanModels
     });
     onClose();
   };

@@ -206,7 +206,7 @@ const defaultAiSettings = {
     perplexity: ''
   },
   models: {
-    gemini: 'gemini-2.5-flash',
+    gemini: 'gemini-3.8-flash',
     openai: 'gpt-4o',
     claude: 'claude-3-7-sonnet-20250219',
     grok: 'grok-2-latest',
@@ -258,11 +258,15 @@ export default function Home() {
         const storedAi = localStorage.getItem('ai_provider_settings');
         if (storedAi) {
           const parsed = JSON.parse(storedAi);
+          const loadedModels = { ...(parsed.models || {}) };
+          if (!loadedModels.gemini || loadedModels.gemini.includes('2.5')) {
+            loadedModels.gemini = 'gemini-3.8-flash';
+          }
           setAiSettings(prev => ({
             ...prev,
             ...parsed,
             keys: { ...prev.keys, ...(parsed.keys || {}) },
-            models: { ...prev.models, ...(parsed.models || {}) }
+            models: { ...prev.models, ...loadedModels }
           }));
         } else {
           const storedKey = localStorage.getItem('gemini_api_key');
@@ -338,11 +342,20 @@ export default function Home() {
   };
 
   const handleSaveAiSettings = (newSettings) => {
-    setAiSettings(newSettings);
+    const cleanSettings = {
+      ...newSettings,
+      models: {
+        ...newSettings.models,
+        gemini: (!newSettings.models?.gemini || newSettings.models.gemini.includes('2.5'))
+          ? 'gemini-3.8-flash'
+          : newSettings.models.gemini
+      }
+    };
+    setAiSettings(cleanSettings);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('ai_provider_settings', JSON.stringify(newSettings));
-      if (newSettings.keys?.gemini) {
-        localStorage.setItem('gemini_api_key', newSettings.keys.gemini);
+      localStorage.setItem('ai_provider_settings', JSON.stringify(cleanSettings));
+      if (cleanSettings.keys?.gemini) {
+        localStorage.setItem('gemini_api_key', cleanSettings.keys.gemini);
       }
     }
     const provNames = {

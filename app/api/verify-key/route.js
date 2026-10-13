@@ -17,9 +17,16 @@ export async function POST(request) {
       preview: result.preview
     });
   } catch (error) {
+    let errorMsg = error?.message || 'Failed to authenticate with selected AI provider';
+    try {
+      const parsed = JSON.parse(errorMsg);
+      if (parsed?.error?.message) {
+        errorMsg = parsed.error.message;
+      }
+    } catch (_) {}
     return Response.json({
       valid: false,
-      error: error?.message || 'Failed to authenticate with selected AI provider'
+      error: errorMsg
     }, { status: 400 });
   }
 }

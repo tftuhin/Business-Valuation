@@ -122,17 +122,37 @@ export async function verifyProviderKey({ providerId, apiKey, modelId }) {
   }
 
   if (provider.id === 'gemini') {
+    let cleanModel = targetModel;
+    if (!cleanModel || cleanModel.includes('2.5')) {
+      cleanModel = 'gemini-3.8-flash';
+    }
     const ai = new GoogleGenAI({ apiKey: key });
-    const response = await ai.models.generateContent({
-      model: targetModel,
-      contents: 'Respond with "PONG" to confirm connectivity.',
-    });
-    return {
-      valid: true,
-      provider: provider.name,
-      model: targetModel,
-      preview: response.text?.slice(0, 40)?.trim() || 'OK'
-    };
+    const candidates = [cleanModel, 'gemini-3.8-flash', 'gemini-3-flash-preview', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+    const uniqueCandidates = [...new Set(candidates.filter(Boolean))];
+
+    let lastError = null;
+    for (const cand of uniqueCandidates) {
+      try {
+        const response = await ai.models.generateContent({
+          model: cand,
+          contents: 'Respond with "PONG" to confirm connectivity.',
+        });
+        return {
+          valid: true,
+          provider: provider.name,
+          model: cand,
+          preview: response.text?.slice(0, 40)?.trim() || 'OK'
+        };
+      } catch (candErr) {
+        lastError = candErr;
+        const msg = candErr?.message || String(candErr);
+        if (msg.includes('404') || msg.includes('NOT_FOUND') || msg.includes('not found') || msg.includes('is no longer available') || msg.includes('unsupported')) {
+          continue;
+        }
+        throw candErr;
+      }
+    }
+    throw lastError || new Error(`Failed to verify Gemini API key with models: ${uniqueCandidates.join(', ')}`);
   }
 
   if (provider.id === 'openai') {
@@ -269,24 +289,61 @@ export async function runUnifiedCompletion({
 
   // 1. Google Gemini
   if (provider.id === 'gemini') {
+    let cleanModel = targetModel;
+    if (!cleanModel || cleanModel.includes('2.5')) {
+      cleanModel = 'gemini-3.8-flash';
+    }
     const ai = new GoogleGenAI({ apiKey: key });
     let response = null;
-    try {
-      response = await ai.models.generateContent({
-        model: targetModel,
-        contents: `${systemPrompt ? `${systemPrompt}\n\n` : ''}${userPrompt}`,
-        config: {
-          temperature,
-          tools: [{ googleSearch: {} }]
+    let successfulModel = cleanModel;
+
+    const candidateModels = [cleanModel, 'gemini-3.8-flash', 'gemini-3-flash-preview', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+    const uniqueCandidates = [...new Set(candidateModels.filter(Boolean))];
+
+    let lastError = null;
+
+    for (const cand of uniqueCandidates) {
+      try {
+        // Attempt first with Search Grounding
+        try {
+          response = await ai.models.generateContent({
+            model: cand,
+            contents: `${systemPrompt ? `${systemPrompt}\n\n` : ''}${userPrompt}`,
+            config: {
+              temperature,
+              tools: [{ googleSearch: {} }]
+            }
+          });
+          successfulModel = cand;
+          break;
+        } catch (searchToolErr) {
+          const searchMsg = searchToolErr?.message || String(searchToolErr);
+          // If model itself is 404/deprecated, rethrow to outer catch to test next candidate
+          if (searchMsg.includes('404') || searchMsg.includes('NOT_FOUND') || searchMsg.includes('not found') || searchMsg.includes('is no longer available')) {
+            throw searchToolErr;
+          }
+          // Otherwise try without tools (e.g. tool quota / tool permission constraint)
+          response = await ai.models.generateContent({
+            model: cand,
+            contents: `${systemPrompt ? `${systemPrompt}\n\n` : ''}${userPrompt}`,
+            config: { temperature }
+          });
+          successfulModel = cand;
+          break;
         }
-      });
-    } catch (gErr) {
-      // Fallback without tools if googleSearch is restricted or model differs
-      response = await ai.models.generateContent({
-        model: targetModel,
-        contents: `${systemPrompt ? `${systemPrompt}\n\n` : ''}${userPrompt}`,
-        config: { temperature }
-      });
+      } catch (candErr) {
+        lastError = candErr;
+        const msg = candErr?.message || String(candErr);
+        if (msg.includes('404') || msg.includes('NOT_FOUND') || msg.includes('not found') || msg.includes('is no longer available')) {
+          console.warn(`[Gemini Fallback] Model ${cand} unavailable (404/deprecated), advancing to next candidate...`);
+          continue;
+        }
+        throw candErr;
+      }
+    }
+
+    if (!response) {
+      throw lastError || new Error('All Gemini candidate models failed to generate content.');
     }
 
     textResult = response.text || '';
@@ -300,7 +357,7 @@ export async function runUnifiedCompletion({
       text: textResult,
       groundingSources,
       provider: provider.name,
-      model: targetModel
+      model: successfulModel
     };
   }
 
