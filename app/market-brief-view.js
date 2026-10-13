@@ -331,7 +331,7 @@ export default function MarketBriefView({
                     onClick={onOpenCustomModal}
                   >
                     <Plus size={13} />
-                    <span>+ New Target</span>
+                    <span>New Target</span>
                   </button>
                 </div>
               </div>
@@ -356,16 +356,6 @@ export default function MarketBriefView({
                     <ChevronDown size={15} />
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={onOpenCustomModal}
-                  style={{ gap: '0.35rem', flexShrink: 0 }}
-                  title="Add custom target company profile"
-                >
-                  <Plus size={13} />
-                  <span>+ New Target</span>
-                </button>
                 <span className="badge badge-outline">{seller?.location || 'Verified Record'}</span>
               </div>
 
