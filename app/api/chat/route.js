@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { runUnifiedCompletion, resolveApiKey } from '../llm-provider';
 
 export async function POST(request) {
   let body = {};
@@ -10,10 +10,16 @@ export async function POST(request) {
       comparableDeals = [],
       knowledgeBase = [],
       skills = [],
-      apiKey: userApiKey
+      apiKey: userApiKey,
+      provider: requestedProvider,
+      providerId: requestedProviderId,
+      model: requestedModel,
+      modelId: requestedModelId
     } = body;
 
-    const apiKey = (userApiKey || process.env.GEMINI_API_KEY || '').trim();
+    const providerId = requestedProviderId || requestedProvider || 'gemini';
+    const modelId = requestedModelId || requestedModel;
+    const apiKey = resolveApiKey(providerId, userApiKey);
     const companyName = company.name || 'Target Company';
     const sector = company.sector || 'Enterprise Software';
     const rev = Number(company.revenue) || 25;
@@ -55,38 +61,30 @@ Guidelines:
 - Use clear bullet points, bold key figures, and format mini tables if comparative data is requested.
 - Maintain a direct, authoritative, professional advisory tone.`;
 
-    // Try live Gemini if API key is provided
+    // Try live completion with active provider if API key is resolved
     if (apiKey) {
       try {
-        const ai = new GoogleGenAI({ apiKey });
-        
-        // Build conversation contents
-        const contents = [
-          { role: 'user', parts: [{ text: `${systemPrompt}\n\nUser Question: ${userPrompt}` }] }
-        ];
+        const result = await runUnifiedCompletion({
+          providerId,
+          apiKey,
+          modelId,
+          systemPrompt,
+          userPrompt,
+          messages,
+          temperature: 0.3
+        });
 
-        let response = null;
-        try {
-          response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `${systemPrompt}\n\nConversation History:\n${messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n')}\n\nUSER: ${userPrompt}\n\nASSISTANT:`,
-            config: { temperature: 0.3 }
-          });
-        } catch (m3Err) {
-          response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: `${systemPrompt}\n\nUSER: ${userPrompt}\n\nASSISTANT:`,
-            config: { temperature: 0.3 }
+        if (result && result.text) {
+          return Response.json({
+            success: true,
+            message: result.text,
+            provider: result.provider,
+            model: result.model,
+            citations: result.groundingSources || []
           });
         }
-
-        const reply = response?.text || 'Analysis completed.';
-        return Response.json({
-          success: true,
-          message: reply
-        });
       } catch (err) {
-        console.warn('Live Gemini chat failed, using domain intelligence synthesizer:', err?.message);
+        console.warn(`Live ${providerId} chat failed, falling back to domain synthesizer:`, err?.message);
       }
     }
 

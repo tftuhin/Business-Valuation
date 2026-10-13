@@ -64,6 +64,7 @@ export default function MarketBriefView({
   onOpenCustomModal = () => {},
   onOpenApiKeyModal = () => {},
   apiKey = '',
+  aiSettings = null,
   knowledgeBase = [],
   skills = [],
   reportLayouts = [],
@@ -171,7 +172,9 @@ export default function MarketBriefView({
             retention,
             netDebt
           },
-          apiKey,
+          providerId: aiSettings?.activeProvider || 'gemini',
+          modelId: aiSettings?.models?.[aiSettings?.activeProvider],
+          apiKey: aiSettings?.keys?.[aiSettings?.activeProvider] || apiKey,
           knowledgeBase: (knowledgeBase || []).filter(k => k.enabled),
           skills: (skills || []).filter(s => s.enabled),
           reportLayout: (reportLayouts || []).find(l => l.id === activeLayoutId)
@@ -916,8 +919,10 @@ export default function MarketBriefView({
           financials={{ revenue, growth, margin, retention, netDebt }}
           comparableDeals={selectedDeals}
           knowledgeBase={knowledgeBase}
-          skills={skills}
-          apiKey={apiKey}
+          apiKey={aiSettings?.keys?.[aiSettings?.activeProvider] || apiKey}
+          providerId={aiSettings?.activeProvider || 'gemini'}
+          modelId={aiSettings?.models?.[aiSettings?.activeProvider] || ''}
+          aiSettings={aiSettings}
           onToast={onToast}
         />
       )}

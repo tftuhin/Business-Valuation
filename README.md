@@ -13,9 +13,13 @@ An autonomous AI agentic assistance system for M&A deal intelligence, market res
    - **04 Valuation Engine**: Computes Lower, Central (median), and Strong-Buyer reference valuation cases and models an Enterprise-to-Equity Net Debt bridge.
    - **05 Institutional Report Synthesizer**: Formats a comprehensive 8-section M&A Market Brief adhering to investment banking and private equity standards.
 
-2. **Dual-Mode AI Engine**:
-   - **Live Google Gemini 2.5 Flash + Search Grounding**: Connect your Gemini API Key directly in the UI settings or via `.env.local` to trigger real-time Google Search grounding.
-   - **Intelligent Offline Domain Engine**: Built-in high-fidelity domain simulator that immediately synthesizes realistic deal research and reports if no API key is provided.
+2. **Multi-Provider AI Architecture (5 Supported Engines)**:
+   - **Google Gemini**: Gemini 3.8 Flash, 3 Flash Preview, and Search Grounding.
+   - **OpenAI / ChatGPT**: GPT-4o, GPT-4o mini, o3-mini, and structured JSON synthesis.
+   - **Anthropic Claude**: Claude 3.7 Sonnet (Hybrid Reasoning), Claude 3.5 Sonnet, and Haiku.
+   - **xAI Grok**: Grok 2, Grok Beta real-time market telemetry.
+   - **Perplexity AI**: Sonar Pro & Sonar Reasoning with automatic real-time web citations on precedent deals.
+   - **Intelligent Offline Simulator**: Zero-configuration domain synthesizer that runs instantly if no keys are provided.
 
 3. **Hybrid Company Input Flow**:
    - Select from pre-loaded industry presets across Healthcare IT, FinTech, CyberSecurity, and B2B SaaS.

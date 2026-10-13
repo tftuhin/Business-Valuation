@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { runUnifiedCompletion, resolveApiKey } from '../llm-provider';
 
 // Intelligent domain synthesis engine for offline/fallback mode
 function generateFallbackResearch({ company, sector, revenue, growth, margin, retention, knowledgeBase = [], skills = [], reportLayout = null }) {
@@ -209,9 +209,22 @@ export async function POST(request) {
   let body = {};
   try {
     body = await request.json().catch(() => ({}));
-    const { company = {}, custom = false, apiKey: userApiKey, knowledgeBase = [], skills = [], reportLayout = null } = body;
+    const {
+      company = {},
+      custom = false,
+      apiKey: userApiKey,
+      provider: requestedProvider,
+      providerId: requestedProviderId,
+      model: requestedModel,
+      modelId: requestedModelId,
+      knowledgeBase = [],
+      skills = [],
+      reportLayout = null
+    } = body;
 
-    const apiKey = (userApiKey || process.env.GEMINI_API_KEY || '').trim();
+    const providerId = requestedProviderId || requestedProvider || 'gemini';
+    const modelId = requestedModelId || requestedModel;
+    const apiKey = resolveApiKey(providerId, userApiKey);
 
     const companyName = company.name?.trim() || 'Sample Company';
     const sector = company.sector?.trim() || 'Enterprise Software';
@@ -238,9 +251,6 @@ export async function POST(request) {
       });
       return Response.json(fallbackResult);
     }
-
-    // Live AI Execution with Gemini API and Google Search Grounding!
-    const ai = new GoogleGenAI({ apiKey });
 
     // Build Knowledge Base context block
     let kbContext = '';
@@ -338,60 +348,27 @@ Instructions:
 }
 `;
 
-    let response = null;
-    let usedModel = 'gemini-3-flash-preview';
+    let result = null;
+    let usedModel = `${providerId} (${modelId || 'default'})`;
     let groundingSources = [];
-    let searchQueries = [];
 
-    // Attempt 1: Gemini 3 Flash Preview with Google Search Grounding
     try {
-      response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: {
-          tools: [{ googleSearch: {} }],
-          temperature: 0.2
-        }
+      result = await runUnifiedCompletion({
+        providerId,
+        apiKey,
+        modelId,
+        userPrompt: prompt,
+        temperature: 0.2
       });
-      usedModel = 'Gemini 3 Flash + Google Search Grounding';
-    } catch (searchErr) {
-      console.warn('Search tool attempt failed (quota or tool error), retrying direct model:', searchErr?.message);
-      // Attempt 2: Direct model without search tool (avoids search quota limits)
-      try {
-        response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: prompt,
-          config: {
-            temperature: 0.2
-          }
-        });
-        usedModel = 'Gemini 3 Flash (Direct Generation)';
-      } catch (directErr) {
-        console.warn('Direct model retry failed, attempting gemini-3.8-flash:', directErr?.message);
-        // Attempt 3: gemini-3.8-flash
-        try {
-          response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: prompt,
-            config: { temperature: 0.2 }
-          });
-          usedModel = 'Gemini 3.8 Flash';
-        } catch (m38Err) {
-          console.warn('All live model calls exhausted quota or timed out:', m38Err?.message);
-          throw m38Err;
-        }
+      if (result) {
+        usedModel = `${result.provider} (${result.model})`;
+        groundingSources = result.groundingSources || [];
       }
+    } catch (llmErr) {
+      console.warn(`Live ${providerId} model call failed:`, llmErr?.message);
     }
 
-    const responseText = response?.text || '';
-
-    // Extract grounding sources & search queries
-    const metadata = response?.candidates?.[0]?.groundingMetadata;
-    searchQueries = metadata?.webSearchQueries || [];
-    groundingSources = metadata?.groundingChunks?.map(chunk => ({
-      title: chunk.web?.title || 'Web Search Source',
-      uri: chunk.web?.uri || ''
-    })).filter(s => s.uri) || [];
+    const responseText = result?.text || '';
 
     // Parse JSON from response
     let parsedData = null;
@@ -454,10 +431,10 @@ Instructions:
 
     const agentLogs = [
       { timestamp: new Date(Date.now() - 5000).toISOString(), agent: 'Company Detective Agent', message: `Identified and profiled ${companyName} (${website || sector}).` },
-      ...(searchQueries.map((q, idx) => ({
+      ...((groundingSources || []).slice(0, 4).map((s, idx) => ({
         timestamp: new Date(Date.now() - (4000 - idx * 500)).toISOString(),
         agent: 'Market Research Agent',
-        message: `Executed Google Search Grounding: "${q}"`
+        message: `Grounding citation verified: ${s.title}`
       }))),
       { timestamp: new Date(Date.now() - 2000).toISOString(), agent: 'Deal Scout Agent', message: `Discovered and verified ${deals.length} precedent M&A transactions in ${sector}.` },
       { timestamp: new Date(Date.now() - 1000).toISOString(), agent: 'Valuation Engine', message: `Computed multi-scenario enterprise range: $${lowEV}M to $${highEV}M (Median: $${medEV}M).` },

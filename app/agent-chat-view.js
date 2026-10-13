@@ -13,6 +13,9 @@ export default function AgentChatView({
   knowledgeBase = [],
   skills = [],
   apiKey = '',
+  providerId = 'gemini',
+  modelId = '',
+  aiSettings = null,
   onToast = () => {}
 }) {
   const [messages, setMessages] = useState([
@@ -77,7 +80,9 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
           comparableDeals,
           knowledgeBase,
           skills,
-          apiKey
+          apiKey: aiSettings?.keys?.[aiSettings?.activeProvider] || apiKey,
+          providerId: aiSettings?.activeProvider || providerId || 'gemini',
+          modelId: aiSettings?.models?.[aiSettings?.activeProvider] || modelId
         })
       });
 
@@ -88,6 +93,9 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
           id: `assistant-${Date.now()}`,
           role: 'assistant',
           content: data.message,
+          provider: data.provider,
+          model: data.model,
+          citations: data.citations || [],
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setMessages(prev => [...prev, agentMessage]);
@@ -204,10 +212,28 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
                       }}
                     />
                   )}
+
+                  {Array.isArray(msg.citations) && msg.citations.length > 0 && (
+                    <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid hsl(var(--border))', fontSize: '0.6875rem' }}>
+                      <strong style={{ display: 'block', marginBottom: '0.25rem', color: 'hsl(var(--muted-foreground))' }}>Online Research Citations:</strong>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                        {msg.citations.map((c, idx) => (
+                          <a key={idx} href={c.uri} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'hsl(var(--primary))', background: 'hsl(var(--muted))', padding: '0.125rem 0.35rem', borderRadius: '4px' }}>
+                            {c.title} ↗
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="chat-bubble-meta">
                   <span>{msg.timestamp}</span>
+                  {msg.provider && (
+                    <span className="badge badge-outline" style={{ fontSize: '0.625rem', padding: '0.05rem 0.35rem' }}>
+                      {msg.provider}
+                    </span>
+                  )}
                   {!isUser && (
                     <button
                       type="button"

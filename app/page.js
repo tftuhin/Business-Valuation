@@ -196,10 +196,28 @@ const defaultLayouts = [
   }
 ];
 
+const defaultAiSettings = {
+  activeProvider: 'gemini',
+  keys: {
+    gemini: '',
+    openai: '',
+    claude: '',
+    grok: '',
+    perplexity: ''
+  },
+  models: {
+    gemini: 'gemini-2.5-flash',
+    openai: 'gpt-4o',
+    claude: 'claude-3-7-sonnet-20250219',
+    grok: 'grok-2-latest',
+    perplexity: 'sonar-pro'
+  }
+};
+
 export default function Home() {
   const [companies, setCompanies] = useState(defaultCompanies);
   const [toast, setToast] = useState('');
-  const [apiKey, setApiKey] = useState('');
+  const [aiSettings, setAiSettings] = useState(defaultAiSettings);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -233,11 +251,31 @@ export default function Home() {
     };
   }, [isDropdownOpen]);
 
-  // Initialize theme, API key, and state from localStorage
+  // Initialize theme, AI settings, and state from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedKey = localStorage.getItem('gemini_api_key');
-      if (storedKey) setApiKey(storedKey);
+      try {
+        const storedAi = localStorage.getItem('ai_provider_settings');
+        if (storedAi) {
+          const parsed = JSON.parse(storedAi);
+          setAiSettings(prev => ({
+            ...prev,
+            ...parsed,
+            keys: { ...prev.keys, ...(parsed.keys || {}) },
+            models: { ...prev.models, ...(parsed.models || {}) }
+          }));
+        } else {
+          const storedKey = localStorage.getItem('gemini_api_key');
+          if (storedKey) {
+            setAiSettings(prev => ({
+              ...prev,
+              keys: { ...prev.keys, gemini: storedKey }
+            }));
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load AI settings from storage:', e);
+      }
 
       const savedTheme = localStorage.getItem('shadcn_theme');
       if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -299,16 +337,28 @@ export default function Home() {
     }
   };
 
-  const handleSaveApiKey = (newKey) => {
-    setApiKey(newKey);
+  const handleSaveAiSettings = (newSettings) => {
+    setAiSettings(newSettings);
     if (typeof window !== 'undefined') {
-      if (newKey) {
-        localStorage.setItem('gemini_api_key', newKey);
-        setToast('Gemini API key saved! Live models & search grounding activated.');
-      } else {
-        localStorage.removeItem('gemini_api_key');
-        setToast('API key removed. Running in Intelligent Offline Simulator.');
+      localStorage.setItem('ai_provider_settings', JSON.stringify(newSettings));
+      if (newSettings.keys?.gemini) {
+        localStorage.setItem('gemini_api_key', newSettings.keys.gemini);
       }
+    }
+    const provNames = {
+      gemini: 'Google Gemini',
+      openai: 'OpenAI (ChatGPT)',
+      claude: 'Anthropic Claude',
+      grok: 'xAI Grok',
+      perplexity: 'Perplexity AI'
+    };
+    const activeProv = provNames[newSettings.activeProvider] || 'Google Gemini';
+    const activeModel = newSettings.models?.[newSettings.activeProvider] || '';
+    const hasKey = Boolean(newSettings.keys?.[newSettings.activeProvider]);
+    if (hasKey) {
+      setToast(`AI Settings saved! Active Engine: ${activeProv} (${activeModel})`);
+    } else {
+      setToast(`AI Settings saved for ${activeProv}. Running in Domain Simulator until key is configured.`);
     }
   };
 
@@ -355,6 +405,19 @@ export default function Home() {
   const activeSkillsCount = skills.filter(s => s.enabled).length;
   const currentLayoutName = reportLayouts.find(l => l.id === activeLayoutId)?.name || 'Standard M&A';
 
+  const activeProvider = aiSettings.activeProvider || 'gemini';
+  const activeKey = aiSettings.keys?.[activeProvider] || '';
+  const activeModel = aiSettings.models?.[activeProvider] || '';
+  const provLabels = {
+    gemini: 'Gemini',
+    openai: 'ChatGPT',
+    claude: 'Claude',
+    grok: 'Grok',
+    perplexity: 'Perplexity'
+  };
+  const activeProviderLabel = provLabels[activeProvider] || 'Gemini';
+  const hasActiveKey = Boolean(activeKey);
+
   return (
     <main className="standalone-shell">
       {/* Sticky Navigation Header */}
@@ -394,10 +457,10 @@ export default function Home() {
                     width: 7,
                     height: 7,
                     borderRadius: '50%',
-                    backgroundColor: apiKey ? '#10b981' : '#f59e0b',
+                    backgroundColor: hasActiveKey ? '#10b981' : '#f59e0b',
                     display: 'inline-block'
                   }}
-                  title={apiKey ? 'AI API Key Configured' : 'AI API Key Not Configured (Click AI Settings)'}
+                  title={hasActiveKey ? `${activeProviderLabel} Active (${activeModel})` : `${activeProviderLabel} Not Configured (Click AI Settings)`}
                 />
                 <ChevronDown
                   size={12}
@@ -518,12 +581,12 @@ export default function Home() {
                         <KeyRound size={14} />
                       </div>
                       <div className="dropdown-item-title">
-                        <span className="dropdown-item-name">AI Settings</span>
-                        <span className="dropdown-item-desc">Configure Gemini API key & inference</span>
+                        <span className="dropdown-item-name">AI Settings ({activeProviderLabel})</span>
+                        <span className="dropdown-item-desc">{activeModel} · Gemini, ChatGPT, Claude, Grok, Perplexity</span>
                       </div>
                     </div>
-                    <span className={`badge ${apiKey ? 'badge-success' : 'badge-secondary'}`} style={{ fontSize: '0.625rem' }}>
-                      {apiKey ? 'Active' : 'Offline'}
+                    <span className={`badge ${hasActiveKey ? 'badge-success' : 'badge-secondary'}`} style={{ fontSize: '0.625rem' }}>
+                      {hasActiveKey ? `${activeProviderLabel} Active` : 'Offline'}
                     </span>
                   </button>
                 </div>
@@ -549,7 +612,8 @@ export default function Home() {
         onToast={setToast}
         onOpenCustomModal={() => setIsCustomModalOpen(true)}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
-        apiKey={apiKey}
+        apiKey={activeKey}
+        aiSettings={aiSettings}
         knowledgeBase={knowledgeBase}
         skills={skills}
         reportLayouts={reportLayouts}
@@ -564,8 +628,8 @@ export default function Home() {
       <ApiKeyModal
         isOpen={isApiKeyModalOpen}
         onClose={() => setIsApiKeyModalOpen(false)}
-        currentKey={apiKey}
-        onSaveKey={handleSaveApiKey}
+        aiSettings={aiSettings}
+        onSaveSettings={handleSaveAiSettings}
       />
 
       {/* Custom Company Dialog */}
