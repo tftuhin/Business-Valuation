@@ -1,0 +1,625 @@
+'use client';
+
+import { useEffect, useState, useRef } from 'react';
+import {
+  CheckCircle2, Moon, Sparkles, Sun, X, Building2, KeyRound,
+  BookOpen, Zap, LayoutTemplate, ChevronDown, SlidersHorizontal
+} from 'lucide-react';
+import MarketBriefView from './market-brief-view';
+import ApiKeyModal from './api-key-modal';
+import CustomCompanyModal from './custom-company-modal';
+import KnowledgeBaseModal from './knowledge-base-modal';
+import SkillsModal from './skills-modal';
+import ReportLayoutsModal from './report-layouts-modal';
+
+// Initial pre-loaded industry presets
+const defaultCompanies = [
+  {
+    id: 'sample-health',
+    name: 'CareLogic Solutions',
+    initials: 'CL',
+    sector: 'Healthcare IT & Clinical SaaS',
+    website: 'carelogicsolutions.com',
+    revenue: '$28M',
+    growth: '34%',
+    margin: '19%',
+    retention: '114%',
+    netDebt: 4,
+    location: 'Austin, TX',
+    notes: 'Specialized EHR workflow automation and patient intake telemetry.'
+  },
+  {
+    id: 'sample-fintech',
+    name: 'LedgerFlow Treasury',
+    initials: 'LF',
+    sector: 'FinTech & B2B Payments',
+    website: 'ledgerflowpay.com',
+    revenue: '$42M',
+    growth: '28%',
+    margin: '22%',
+    retention: '118%',
+    netDebt: 6,
+    location: 'Chicago, IL',
+    notes: 'Real-time corporate treasury reconciliation and multi-currency payout infrastructure.'
+  },
+  {
+    id: 'sample-cyber',
+    name: 'SentinelVault Cyber',
+    initials: 'SV',
+    sector: 'CyberSecurity & Zero-Trust',
+    website: 'sentinelvault.io',
+    revenue: '$35M',
+    growth: '45%',
+    margin: '15%',
+    retention: '122%',
+    netDebt: 2,
+    location: 'Boston, MA',
+    notes: 'Identity threat detection and autonomous cloud privilege management.'
+  },
+  {
+    id: 'sample-saas',
+    name: 'NexusLogic Enterprise AI',
+    initials: 'NL',
+    sector: 'Enterprise B2B SaaS & AI',
+    website: 'nexuslogic.ai',
+    revenue: '$21M',
+    growth: '55%',
+    margin: '12%',
+    retention: '125%',
+    netDebt: 3,
+    location: 'San Francisco, CA',
+    notes: 'Autonomous knowledge graph synthesis and operational agent infrastructure.'
+  }
+];
+
+const defaultKnowledgeBase = [
+  {
+    id: 'kb-preset-1',
+    title: 'Healthcare SaaS M&A Valuation Guidelines (2025-2026)',
+    category: 'M&A Valuation Rubrics',
+    type: 'note',
+    content: 'Clinical workflow automation solutions with EHR integration command median EV/Revenue multiples between 4.5x and 5.8x when Net Revenue Retention exceeds 112%. Gross revenue retention below 90% triggers a 1.2x multiple discount. Telehealth infrastructure multiple contraction has stabilized at 3.0x - 3.8x.',
+    wordCount: 52,
+    enabled: true,
+    addedAt: 'Pre-loaded'
+  },
+  {
+    id: 'kb-preset-2',
+    title: 'Private Equity Technology Diligence Checklist',
+    category: 'Diligence Checklists',
+    type: 'file',
+    content: '1. Quality of Earnings (QoE): Distinguish between true recurring software ARR and one-off professional implementation services.\n2. Customer Concentration: Flag any single logo representing >12% of total ARR.\n3. Cloud Infrastructure Cost: Hosting costs should not exceed 18% of revenue for high-margin SaaS assets.\n4. IP Assignment: Ensure 100% assignment agreements for offshore contractor repositories.',
+    wordCount: 65,
+    enabled: true,
+    addedAt: 'Pre-loaded'
+  },
+  {
+    id: 'kb-preset-3',
+    title: 'FinTech Corporate Treasury & Payment Rails Benchmark',
+    category: 'Market Intelligence',
+    type: 'note',
+    content: 'Multi-currency B2B treasury platforms demonstrate average transaction take rates of 18-35 bps. Regulatory compliance moats (MSB licenses, PCI-DSS Level 1) increase strategic buyer valuation premiums by 25-40% compared to unlicensed white-label wrappers.',
+    wordCount: 38,
+    enabled: true,
+    addedAt: 'Pre-loaded'
+  }
+];
+
+const defaultSkills = [
+  {
+    id: 'skill-unit-econ',
+    name: 'SaaS Unit Economics Audit',
+    filename: 'saas-unit-economics-audit.skill',
+    description: 'Rigorously audits Magic Number, CAC payback, LTV/CAC, and Rule of 40 quality.',
+    instructions: '1. Calculate Rule of 40 score (YoY Growth Rate % + EBITDA Margin %). If score > 40%, assign "Elite Performer" status.\n2. Evaluate Net Revenue Retention (NRR): Above 115% indicates net expansion; below 100% indicates net contraction requiring diligence alert.\n3. Benchmark Gross Margin: Target > 70% for pure-play software.',
+    enabled: true,
+    isCustom: false
+  },
+  {
+    id: 'skill-comps-calibrator',
+    name: 'Precedent Deal Calibrator',
+    filename: 'precedent-deal-calibrator.skill',
+    description: 'Calibrates precedent M&A transaction multiples against growth and margin velocity.',
+    instructions: '1. For every comp transaction, evaluate strategic buyer vs financial sponsor premium.\n2. Scale the central multiple upward if target growth rate exceeds the peer comp median by > 10%.\n3. Discount multiple by 0.5x if target net debt to EBITDA ratio exceeds 3.0x.',
+    enabled: true,
+    isCustom: false
+  },
+  {
+    id: 'skill-synergy-matrix',
+    name: 'Strategic Synergy Evaluator',
+    filename: 'strategic-synergy-evaluator.skill',
+    description: 'Evaluates revenue cross-sell and cost rationalization potential across potential buyers.',
+    instructions: '1. Identify 2 Tier-1 Strategic Consolidators and evaluate customer overlap.\n2. Identify 2 Private Equity sponsors with active tech portfolio platforms for bolt-on acquisition.\n3. Estimate 3-year post-acquisition cost synergy potential (SG&A rationalization and G&A cloud consolidation).',
+    enabled: true,
+    isCustom: false
+  }
+];
+
+const defaultLayouts = [
+  {
+    id: 'layout-standard-ma',
+    name: 'Standard Institutional M&A Brief',
+    description: 'Industry-standard 8-section investment banking market brief and valuation memorandum.',
+    isDefault: true,
+    sections: [
+      '1. Executive Summary & Investment Thesis',
+      '2. Business Overview & Operational Profile',
+      '3. Financial Summary & Operational KPIs (Table)',
+      '4. Market Dynamics & Industry Landscape',
+      '5. Precedent Deal Comparables (Table)',
+      '6. Indicative Valuation Analysis & Range Corridor',
+      '7. Potential Strategic & Financial Buyer Universe',
+      '8. Due Diligence Priorities & Review Checklist'
+    ]
+  },
+  {
+    id: 'layout-pe-memo',
+    name: 'Private Equity LBO Investment Memo',
+    description: 'Structured for Investment Committee reviews focusing on leverage capacity, returns, and risks.',
+    isDefault: false,
+    sections: [
+      '1. Investment Recommendation & Deal Summary',
+      '2. Target Market Attractiveness & Barriers to Entry',
+      '3. Historical Financials & Free Cash Flow Conversion',
+      '4. Precedent Sponsor Buyout Multiples',
+      '5. Leverage Capacity & Returns Sensitivity (IRR/MoIC)',
+      '6. Value Creation Plan (Organic & M&A Roll-Up)',
+      '7. Downside Risks & Mitigations'
+    ]
+  },
+  {
+    id: 'layout-exec-teaser',
+    name: 'Executive 1-Page Deal Teaser',
+    description: 'High-level executive summary tailored for C-suite decision makers and initial outreach.',
+    isDefault: false,
+    sections: [
+      '1. Opportunity Overview & Core Value Proposition',
+      '2. Key Financial Highlights (Revenue, Growth, Margin)',
+      '3. Market Positioning & Differentiating Moats',
+      '4. Valuation Benchmark & Multiple Corridor',
+      '5. Strategic Fit & Transaction Rationale'
+    ]
+  },
+  {
+    id: 'layout-commercial-dd',
+    name: 'Commercial Diligence & Market Study',
+    description: 'In-depth market landscape study, customer cohort dynamics, and competitive benchmarking.',
+    isDefault: false,
+    sections: [
+      '1. Market Sizing (TAM/SAM/SOM) & Structural Drivers',
+      '2. Competitive Matrix & Feature Differentiation',
+      '3. Customer Retention & Cohort Health Analysis',
+      '4. Pricing Power & Unit Economics Review',
+      '5. Precedent M&A Transactions in Adjacent Niches',
+      '6. Strategic Exit Roadmap'
+    ]
+  }
+];
+
+export default function Home() {
+  const [companies, setCompanies] = useState(defaultCompanies);
+  const [toast, setToast] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // Agent extensions state
+  const [knowledgeBase, setKnowledgeBase] = useState(defaultKnowledgeBase);
+  const [isKbModalOpen, setIsKbModalOpen] = useState(false);
+
+  const [skills, setSkills] = useState(defaultSkills);
+  const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
+
+  const [reportLayouts, setReportLayouts] = useState(defaultLayouts);
+  const [activeLayoutId, setActiveLayoutId] = useState('layout-standard-ma');
+  const [isLayoutsModalOpen, setIsLayoutsModalOpen] = useState(false);
+
+  // Dropdown menu state
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
+  // Initialize theme, API key, and state from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedKey = localStorage.getItem('gemini_api_key');
+      if (storedKey) setApiKey(storedKey);
+
+      const savedTheme = localStorage.getItem('shadcn_theme');
+      if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        setIsDarkMode(true);
+        document.documentElement.classList.add('dark');
+      } else {
+        setIsDarkMode(false);
+        document.documentElement.classList.remove('dark');
+      }
+
+      // Load Knowledge Base
+      try {
+        const storedKb = localStorage.getItem('agent_knowledge_base');
+        if (storedKb) {
+          const parsed = JSON.parse(storedKb);
+          if (Array.isArray(parsed) && parsed.length > 0) setKnowledgeBase(parsed);
+        }
+      } catch (e) {
+        console.error('Failed to load knowledge base from storage:', e);
+      }
+
+      // Load Skills
+      try {
+        const storedSkills = localStorage.getItem('agent_skills');
+        if (storedSkills) {
+          const parsed = JSON.parse(storedSkills);
+          if (Array.isArray(parsed) && parsed.length > 0) setSkills(parsed);
+        }
+      } catch (e) {
+        console.error('Failed to load skills from storage:', e);
+      }
+
+      // Load Layouts
+      try {
+        const storedLayouts = localStorage.getItem('report_layouts');
+        if (storedLayouts) {
+          const parsed = JSON.parse(storedLayouts);
+          if (Array.isArray(parsed) && parsed.length > 0) setReportLayouts(parsed);
+        }
+        const storedActiveLayout = localStorage.getItem('active_report_layout');
+        if (storedActiveLayout) setActiveLayoutId(storedActiveLayout);
+      } catch (e) {
+        console.error('Failed to load layouts from storage:', e);
+      }
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const nextDark = !isDarkMode;
+    setIsDarkMode(nextDark);
+    if (typeof window !== 'undefined') {
+      if (nextDark) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('shadcn_theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('shadcn_theme', 'light');
+      }
+    }
+  };
+
+  const handleSaveApiKey = (newKey) => {
+    setApiKey(newKey);
+    if (typeof window !== 'undefined') {
+      if (newKey) {
+        localStorage.setItem('gemini_api_key', newKey);
+        setToast('Gemini API key saved! Live models & search grounding activated.');
+      } else {
+        localStorage.removeItem('gemini_api_key');
+        setToast('API key removed. Running in Intelligent Offline Simulator.');
+      }
+    }
+  };
+
+  const handleAddCompany = (newCompany) => {
+    setCompanies(prev => [newCompany, ...prev]);
+    setToast(`Added "${newCompany.name}" to active targets!`);
+  };
+
+  const handleUpdateKnowledgeBase = (updated) => {
+    setKnowledgeBase(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('agent_knowledge_base', JSON.stringify(updated));
+    }
+  };
+
+  const handleUpdateSkills = (updated) => {
+    setSkills(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('agent_skills', JSON.stringify(updated));
+    }
+  };
+
+  const handleUpdateLayouts = (updated) => {
+    setReportLayouts(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('report_layouts', JSON.stringify(updated));
+    }
+  };
+
+  const handleSelectLayout = (layoutId) => {
+    setActiveLayoutId(layoutId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('active_report_layout', layoutId);
+    }
+  };
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(''), 4500);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  const activeKbCount = knowledgeBase.filter(k => k.enabled).length;
+  const activeSkillsCount = skills.filter(s => s.enabled).length;
+  const currentLayoutName = reportLayouts.find(l => l.id === activeLayoutId)?.name || 'Standard M&A';
+
+  return (
+    <main className="standalone-shell">
+      {/* Sticky Navigation Header */}
+      <header className="shadcn-navbar">
+        <div className="shadcn-nav-inner">
+          <div className="shadcn-nav-brand">
+            <div className="shadcn-brand-icon">
+              <Sparkles size={14} />
+            </div>
+            <span>MarketBrief</span>
+          </div>
+
+          <nav className="shadcn-nav-center">
+            <span className="shadcn-nav-link active">Deal Intelligence</span>
+            <span className="shadcn-nav-link">Precedent Comps</span>
+            <span className="shadcn-nav-link">Valuation Engine</span>
+          </nav>
+
+          <div className="shadcn-nav-actions">
+            {/* Unified Dropdown Menu */}
+            <div className="dropdown-wrapper" ref={dropdownRef}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm dropdown-trigger"
+                onClick={() => setIsDropdownOpen(prev => !prev)}
+                aria-expanded={isDropdownOpen}
+                aria-haspopup="true"
+                style={{ gap: '0.45rem' }}
+              >
+                <SlidersHorizontal size={13} />
+                <span>Agent Tools & Setup</span>
+                <span className="badge badge-secondary" style={{ fontSize: '0.625rem', padding: '0.1rem 0.35rem' }}>
+                  {activeKbCount + activeSkillsCount}
+                </span>
+                <span
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    backgroundColor: apiKey ? '#10b981' : '#f59e0b',
+                    display: 'inline-block'
+                  }}
+                  title={apiKey ? 'AI API Key Configured' : 'AI API Key Not Configured (Click AI Settings)'}
+                />
+                <ChevronDown
+                  size={12}
+                  style={{
+                    transition: 'transform 0.15s ease',
+                    transform: isDropdownOpen ? 'rotate(180deg)' : 'none'
+                  }}
+                />
+              </button>
+
+              {isDropdownOpen && (
+                <div className="dropdown-menu" role="menu">
+                  <div className="dropdown-header-group">Agent Intelligence & Grounding</div>
+                  
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      setIsKbModalOpen(true);
+                    }}
+                  >
+                    <div className="dropdown-item-content">
+                      <div className="dropdown-item-icon">
+                        <BookOpen size={14} />
+                      </div>
+                      <div className="dropdown-item-title">
+                        <span className="dropdown-item-name">Knowledge Base</span>
+                        <span className="dropdown-item-desc">Reference docs & diligence notes</span>
+                      </div>
+                    </div>
+                    <span className="badge badge-secondary" style={{ fontSize: '0.625rem' }}>
+                      {activeKbCount} active
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      setIsSkillsModalOpen(true);
+                    }}
+                  >
+                    <div className="dropdown-item-content">
+                      <div className="dropdown-item-icon">
+                        <Zap size={14} />
+                      </div>
+                      <div className="dropdown-item-title">
+                        <span className="dropdown-item-name">Agent Skills</span>
+                        <span className="dropdown-item-desc">Evaluation & audit playbooks (.skill)</span>
+                      </div>
+                    </div>
+                    <span className="badge badge-secondary" style={{ fontSize: '0.625rem' }}>
+                      {activeSkillsCount} active
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      setIsLayoutsModalOpen(true);
+                    }}
+                  >
+                    <div className="dropdown-item-content">
+                      <div className="dropdown-item-icon">
+                        <LayoutTemplate size={14} />
+                      </div>
+                      <div className="dropdown-item-title">
+                        <span className="dropdown-item-name">Report Layouts</span>
+                        <span className="dropdown-item-desc">Change or upload report templates</span>
+                      </div>
+                    </div>
+                    <span className="badge badge-outline" style={{ fontSize: '0.625rem' }}>
+                      {currentLayoutName.split(' ')[0]}
+                    </span>
+                  </button>
+
+                  <div className="dropdown-separator" />
+                  <div className="dropdown-header-group">Pipeline & Environment</div>
+
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      setIsCustomModalOpen(true);
+                    }}
+                  >
+                    <div className="dropdown-item-content">
+                      <div className="dropdown-item-icon">
+                        <Building2 size={14} />
+                      </div>
+                      <div className="dropdown-item-title">
+                        <span className="dropdown-item-name">New Target</span>
+                        <span className="dropdown-item-desc">Add custom company to evaluation pipeline</span>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      setIsApiKeyModalOpen(true);
+                    }}
+                  >
+                    <div className="dropdown-item-content">
+                      <div className="dropdown-item-icon">
+                        <KeyRound size={14} />
+                      </div>
+                      <div className="dropdown-item-title">
+                        <span className="dropdown-item-name">AI Settings</span>
+                        <span className="dropdown-item-desc">Configure Gemini API key & inference</span>
+                      </div>
+                    </div>
+                    <span className={`badge ${apiKey ? 'badge-success' : 'badge-secondary'}`} style={{ fontSize: '0.625rem' }}>
+                      {apiKey ? 'Active' : 'Offline'}
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Dark / Light Mode Toggle */}
+            <button
+              type="button"
+              className="btn btn-outline btn-sm btn-icon"
+              onClick={toggleTheme}
+              title={`Switch to ${isDarkMode ? 'Light' : 'Dark'} mode`}
+            >
+              {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Workflow View */}
+      <MarketBriefView
+        sellers={companies}
+        onToast={setToast}
+        onOpenCustomModal={() => setIsCustomModalOpen(true)}
+        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+        apiKey={apiKey}
+        knowledgeBase={knowledgeBase}
+        skills={skills}
+        reportLayouts={reportLayouts}
+        activeLayoutId={activeLayoutId}
+        onSelectLayout={handleSelectLayout}
+        onOpenKnowledgeBaseModal={() => setIsKbModalOpen(true)}
+        onOpenSkillsModal={() => setIsSkillsModalOpen(true)}
+        onOpenLayoutsModal={() => setIsLayoutsModalOpen(true)}
+      />
+
+      {/* Settings Dialog */}
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        currentKey={apiKey}
+        onSaveKey={handleSaveApiKey}
+      />
+
+      {/* Custom Company Dialog */}
+      <CustomCompanyModal
+        isOpen={isCustomModalOpen}
+        onClose={() => setIsCustomModalOpen(false)}
+        onAddCompany={handleAddCompany}
+      />
+
+      {/* Knowledge Base Modal */}
+      <KnowledgeBaseModal
+        isOpen={isKbModalOpen}
+        onClose={() => setIsKbModalOpen(false)}
+        knowledgeBase={knowledgeBase}
+        onUpdateKnowledgeBase={handleUpdateKnowledgeBase}
+        onToast={setToast}
+      />
+
+      {/* Skills Modal */}
+      <SkillsModal
+        isOpen={isSkillsModalOpen}
+        onClose={() => setIsSkillsModalOpen(false)}
+        skills={skills}
+        onUpdateSkills={handleUpdateSkills}
+        onToast={setToast}
+      />
+
+      {/* Report Layouts Modal */}
+      <ReportLayoutsModal
+        isOpen={isLayoutsModalOpen}
+        onClose={() => setIsLayoutsModalOpen(false)}
+        layouts={reportLayouts}
+        activeLayoutId={activeLayoutId}
+        onSelectLayout={handleSelectLayout}
+        onUpdateLayouts={handleUpdateLayouts}
+        onToast={setToast}
+      />
+
+      {/* Toast Primitive */}
+      {toast && (
+        <div className="toast-primitive" role="status">
+          <CheckCircle2 size={16} style={{ color: 'hsl(var(--emerald))', flexShrink: 0 }} />
+          <span>{toast}</span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm btn-icon"
+            style={{ width: '1.25rem', height: '1.25rem', marginLeft: 'auto' }}
+            aria-label="Dismiss toast"
+            onClick={() => setToast('')}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+    </main>
+  );
+}
