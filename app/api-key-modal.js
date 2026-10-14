@@ -335,7 +335,7 @@ export default function ApiKeyModal({
                 </button>
               </div>
               <span className="form-hint" style={{ fontSize: '0.6875rem' }}>
-                Saved locally in browser storage or read securely from server-side <code style={{ fontSize: '0.6875rem' }}>{currentProvider.envVar}</code>.
+                🔒 <strong>Session-Only Memory:</strong> Held temporarily in active tab memory (<code>sessionStorage</code>). Never saved permanently to disk (<code>localStorage</code>).
               </span>
             </div>
 
@@ -371,6 +371,14 @@ export default function ApiKeyModal({
             )}
           </div>
 
+          {/* Privacy & Security Guarantee Callout */}
+          <div className="alert alert-info" style={{ padding: '0.625rem 0.875rem', fontSize: '0.75rem', marginBottom: '0.5rem' }}>
+            <Shield size={14} style={{ color: 'hsl(var(--primary))' }} />
+            <div>
+              <strong>Client-Side Ephemeral Security:</strong> To prevent exposure, your API keys are never written to permanent browser disk storage (<code>localStorage</code>). Keys exist only in the active session and are purged when you close this browser window.
+            </div>
+          </div>
+
           {/* Offline Fallback notice */}
           <div className="alert alert-info" style={{ padding: '0.625rem 0.875rem', fontSize: '0.75rem' }}>
             <Sparkles size={14} />
@@ -382,14 +390,30 @@ export default function ApiKeyModal({
 
         {/* Modal Footer */}
         <div className="modal-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
             {currentKey && (
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
                 onClick={handleClearCurrent}
               >
-                Clear Key
+                Clear This Key
+              </button>
+            )}
+            {Object.values(keys).some(Boolean) && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ color: 'hsl(var(--destructive))', fontSize: '0.75rem' }}
+                onClick={() => {
+                  setKeys({ gemini: '', openai: '', claude: '', grok: '', perplexity: '' });
+                  if (typeof window !== 'undefined') {
+                    sessionStorage.removeItem('dealbrief_session_keys');
+                  }
+                  setVerifyStatus({});
+                }}
+              >
+                Wipe All Keys
               </button>
             )}
           </div>

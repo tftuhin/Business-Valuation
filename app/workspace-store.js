@@ -44,13 +44,19 @@ export function getCompanyWorkspace(companyId, companyDefaults = {}) {
     research: {
       agentStatus: 'idle',
       generatedReportMarkdown: '',
+      generatedReportFingerprint: '',
+      reportGeneratedAt: null,
       agentLogs: [],
       groundingSources: [],
       activeDeals: null, // Will use default comps or sector comps
       includedDeals: null,
       reviewed: false,
+      approvedFingerprint: '',
+      approvedAt: null,
+      approvedBy: null,
       reviewChecks: { sources: false, assumptions: false, buyerFit: false },
-      lastResearchedAt: null
+      lastResearchedAt: null,
+      dataLineage: { verifiedCount: 0, aiCount: 0, sampleCount: 0 }
     },
     chat: {
       messages: [],

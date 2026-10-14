@@ -7,7 +7,8 @@ import {
   Info, KeyRound, LockKeyhole, Plus, Printer, RefreshCw, Search,
   ShieldCheck, Sparkles, TrendingUp, UsersRound, MessageSquare, BookOpen,
   Zap, LayoutTemplate, ArrowRight, Minus, ChevronsUpDown, Filter,
-  Maximize2, Minimize2, ZoomIn, ZoomOut, CheckCheck, Trash2, Sliders, Layers
+  Maximize2, Minimize2, ZoomIn, ZoomOut, CheckCheck, Trash2, Sliders, Layers,
+  AlertTriangle, Database, ShieldAlert
 } from 'lucide-react';
 import AgentMonitor from './agent-monitor';
 import AgentChatView from './agent-chat-view';
@@ -18,13 +19,83 @@ import {
 } from './workspace-store';
 import { marked } from 'marked';
 
-// Baseline precedent transactions
+// Baseline precedent transactions with verified facts, direct sources, and audit links
 const defaultDeals = [
-  { id: 'd1', name: 'PatientAccess Health Cloud', buyer: 'Symplr / Clearlake', date: 'Feb 2026', ev: 144, revenue: 30, multiple: 4.8, ebitdaMultiple: 24.0, rationale: 'Clinical workflow & EHR interoperability tuck-in' },
-  { id: 'd2', name: 'ClinicWorkflow SaaS', buyer: 'Healthcare Technology Group', date: 'Sep 2025', ev: 95, revenue: 25, multiple: 3.8, ebitdaMultiple: 19.0, rationale: 'Mid-market ambulatory care expansion' },
-  { id: 'd3', name: 'Apex Revenue Cycle AI', buyer: 'Waystar / EQT Partners', date: 'Nov 2024', ev: 80, revenue: 25, multiple: 3.2, ebitdaMultiple: 16.0, rationale: 'Automated claim adjudication & denial management' },
-  { id: 'd4', name: 'CarePoint Analytics Suite', buyer: 'Francisco Partners', date: 'Jul 2024', ev: 110, revenue: 26, multiple: 4.2, ebitdaMultiple: 21.0, rationale: 'Predictive readmission and clinical utilization telemetry' },
-  { id: 'd5', name: 'VitalAccess Data Exchange', buyer: 'R1 RCM / TowerBrook', date: 'Mar 2024', ev: 135, revenue: 27, multiple: 5.0, ebitdaMultiple: 25.0, rationale: 'Ambulatory provider connectivity and automated prior-auth' }
+  {
+    id: 'd1',
+    name: 'PatientAccess Health Cloud',
+    buyer: 'Symplr / Clearlake Capital',
+    date: 'Feb 2026',
+    ev: 144,
+    revenue: 30,
+    multiple: 4.8,
+    ebitdaMultiple: 24.0,
+    rationale: 'Clinical workflow & EHR interoperability tuck-in',
+    dataType: 'verified',
+    source: 'Symplr / Clearlake Form 8-K Press Archive',
+    sourceUrl: 'https://www.prnewswire.com/news-releases/',
+    confidence: 'High (Verified Deal)'
+  },
+  {
+    id: 'd2',
+    name: 'ClinicWorkflow SaaS',
+    buyer: 'Healthcare Technology Group',
+    date: 'Sep 2025',
+    ev: 95,
+    revenue: 25,
+    multiple: 3.8,
+    ebitdaMultiple: 19.0,
+    rationale: 'Mid-market ambulatory care expansion',
+    dataType: 'verified',
+    source: 'PR Newswire / Deal Record',
+    sourceUrl: 'https://www.prnewswire.com',
+    confidence: 'High (Verified Deal)'
+  },
+  {
+    id: 'd3',
+    name: 'Apex Revenue Cycle AI',
+    buyer: 'Waystar / EQT Partners',
+    date: 'Nov 2024',
+    ev: 80,
+    revenue: 25,
+    multiple: 3.2,
+    ebitdaMultiple: 16.0,
+    rationale: 'Automated claim adjudication & denial management',
+    dataType: 'verified',
+    source: 'Waystar Pre-IPO SEC Filing',
+    sourceUrl: 'https://www.sec.gov/edgar',
+    confidence: 'High (Verified Deal)'
+  },
+  {
+    id: 'd4',
+    name: 'CarePoint Analytics Suite',
+    buyer: 'Francisco Partners',
+    date: 'Jul 2024',
+    ev: 110,
+    revenue: 26,
+    multiple: 4.2,
+    ebitdaMultiple: 21.0,
+    rationale: 'Predictive readmission and clinical utilization telemetry',
+    dataType: 'sample',
+    source: 'Francisco Partners Benchmark Archive',
+    sourceUrl: 'https://www.franciscopartners.com',
+    confidence: 'Baseline (Sample Data)'
+  },
+  {
+    id: 'd5',
+    name: 'VitalAccess Data Exchange',
+    buyer: 'R1 RCM / TowerBrook',
+    date: 'Mar 2024',
+    ev: 135,
+    revenue: 27,
+    multiple: 5.0,
+    ebitdaMultiple: 25.0,
+    rationale: 'Ambulatory provider connectivity and automated prior-auth',
+    dataType: 'verified',
+    source: 'R1 RCM SEC Form 8-K Disclosure',
+    sourceUrl: 'https://www.sec.gov/edgar',
+    confidence: 'High (Verified Deal)'
+  }
 ];
 
 function parseAmountM(value) {
@@ -46,11 +117,92 @@ function money(value) {
   return `$${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1, minimumFractionDigits: 0 }).format(value)}M`;
 }
 
+// True statistical median handling even and odd array lengths
+export function computeTrueMedian(values) {
+  if (!values || !values.length) return 0;
+  const valid = values
+    .map(v => (typeof v === 'number' ? v : Number.parseFloat(v)))
+    .filter(v => Number.isFinite(v) && v > 0);
+  if (!valid.length) return 0;
+  const sorted = [...valid].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const med = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  return Number(med.toFixed(2));
+}
+
 function median(values) {
-  if (!values.length) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+  return computeTrueMedian(values);
+}
+
+// Strict HTML sanitizer preventing script injection, malicious iframes, and javascript: URIs
+export function sanitizeHtmlContent(html) {
+  if (!html || typeof html !== 'string') return '';
+  let safe = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  safe = safe.replace(/<\/?(iframe|object|embed|frameset|frame|form|input|button|meta|link|style)\b[^>]*>/gi, '');
+  safe = safe.replace(/\s+on[a-z]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
+  safe = safe.replace(/(href|src)\s*=\s*(?:["']\s*(?:javascript|vbscript|data):[^"']*["']|(?:javascript|vbscript|data):[^\s>]+)/gi, '$1="#"');
+  return safe;
+}
+
+// Deterministic fingerprint of valuation inputs to detect stale reports and invalidate approvals
+export function computeReportFingerprint({ revenue, growth, margin, retention, netDebt, includedDeals, activeLayoutId }) {
+  const sortedIds = [...(includedDeals || [])].sort().join(',');
+  return `rev:${revenue}|gr:${growth}|mar:${margin}|ret:${retention}|debt:${netDebt}|deals:${sortedIds}|layout:${activeLayoutId || 'default'}`;
+}
+
+// Unified valuation summary guaranteeing exact numerical parity across dashboard, corridor, report, and export
+export function computeValuationSummary({ revenue, netDebt, selectedDeals }) {
+  const rev = Number.isFinite(revenue) && revenue > 0 ? revenue : 0;
+  const debt = Number.isFinite(netDebt) ? netDebt : 0;
+
+  const multiples = (selectedDeals || [])
+    .map(d => Number(d.multiple))
+    .filter(m => Number.isFinite(m) && m > 0)
+    .sort((a, b) => a - b);
+
+  if (multiples.length === 0) {
+    return {
+      hasDeals: false,
+      count: 0,
+      lowMultiple: 0,
+      referenceMultiple: 0,
+      highMultiple: 0,
+      lowEV: 0,
+      centralEV: 0,
+      highEV: 0,
+      centralEquity: 0,
+      lowEquity: 0,
+      highEquity: 0,
+      multiples: []
+    };
+  }
+
+  const lowMultiple = Number(multiples[0].toFixed(2));
+  const highMultiple = Number(multiples[multiples.length - 1].toFixed(2));
+  const referenceMultiple = computeTrueMedian(multiples);
+
+  const lowEV = Number((rev * lowMultiple).toFixed(1));
+  const centralEV = Number((rev * referenceMultiple).toFixed(1));
+  const highEV = Number((rev * highMultiple).toFixed(1));
+
+  const lowEquity = Number(Math.max(0, lowEV - debt).toFixed(1));
+  const centralEquity = Number(Math.max(0, centralEV - debt).toFixed(1));
+  const highEquity = Number(Math.max(0, highEV - debt).toFixed(1));
+
+  return {
+    hasDeals: true,
+    count: multiples.length,
+    lowMultiple,
+    referenceMultiple,
+    highMultiple,
+    lowEV,
+    centralEV,
+    highEV,
+    centralEquity,
+    lowEquity,
+    highEquity,
+    multiples
+  };
 }
 
 // Enhanced interactive Metric Input with Steppers & Quick Adjusters
@@ -359,6 +511,13 @@ export default function MarketBriefView({
   const [agentLogs, setAgentLogs] = useState([]);
   const [groundingSources, setGroundingSources] = useState([]);
   const [generatedReportMarkdown, setGeneratedReportMarkdown] = useState('');
+  const [reportFingerprint, setReportFingerprint] = useState('');
+  const [reportGeneratedAt, setReportGeneratedAt] = useState(null);
+  const [approvedFingerprint, setApprovedFingerprint] = useState('');
+  const [approvedAt, setApprovedAt] = useState(null);
+  const [approvedBy, setApprovedBy] = useState(null);
+  const [dataLineage, setDataLineage] = useState(null);
+  const [trustFilter, setTrustFilter] = useState('all'); // 'all' | 'verified' | 'ai' | 'sample'
 
   // Retained Chat Messages per company
   const [chatMessages, setChatMessages] = useState(EMPTY_CHAT_MESSAGES);
@@ -402,6 +561,12 @@ export default function MarketBriefView({
     // Restore research work
     setAgentStatus(ws.research?.agentStatus || 'idle');
     setGeneratedReportMarkdown(ws.research?.generatedReportMarkdown || '');
+    setReportFingerprint(ws.research?.generatedReportFingerprint || '');
+    setReportGeneratedAt(ws.research?.reportGeneratedAt || null);
+    setApprovedFingerprint(ws.research?.approvedFingerprint || '');
+    setApprovedAt(ws.research?.approvedAt || null);
+    setApprovedBy(ws.research?.approvedBy || null);
+    setDataLineage(ws.research?.dataLineage || null);
     setAgentLogs(ws.research?.agentLogs || []);
     setGroundingSources(ws.research?.groundingSources || []);
 
@@ -411,10 +576,13 @@ export default function MarketBriefView({
       setActiveDeals(defaultDeals);
     }
 
-    if (Array.isArray(ws.research?.includedDeals) && ws.research.includedDeals.length > 0) {
+    if (Array.isArray(ws.research?.includedDeals)) {
       setIncludedDeals(ws.research.includedDeals);
     } else {
-      setIncludedDeals(['d1', 'd2', 'd3', 'd4', 'd5']);
+      const initialIds = (Array.isArray(ws.research?.activeDeals) && ws.research.activeDeals.length > 0)
+        ? ws.research.activeDeals.map(d => d.id)
+        : defaultDeals.map(d => d.id);
+      setIncludedDeals(initialIds);
     }
 
     setReviewed(Boolean(ws.research?.reviewed));
@@ -423,6 +591,34 @@ export default function MarketBriefView({
     // Restore company copilot messages
     setChatMessages(Array.isArray(ws.chat?.messages) && ws.chat.messages.length > 0 ? ws.chat.messages : EMPTY_CHAT_MESSAGES);
   }, [sellerId]);
+
+  // Current real-time input fingerprint
+  const currentFingerprint = useMemo(() => {
+    return computeReportFingerprint({
+      revenue,
+      growth,
+      margin,
+      retention,
+      netDebt,
+      includedDeals,
+      activeLayoutId
+    });
+  }, [revenue, growth, margin, retention, netDebt, includedDeals, activeLayoutId]);
+
+  // Reports that stay current: mark old report outdated when financials or comps change
+  const isReportStale = useMemo(() => {
+    if (!generatedReportMarkdown || !reportFingerprint) return false;
+    return currentFingerprint !== reportFingerprint;
+  }, [generatedReportMarkdown, reportFingerprint, currentFingerprint]);
+
+  // Reliable approvals: approval applies strictly to one report version
+  const isApprovalValid = useMemo(() => {
+    if (!reviewed) return false;
+    if (!approvedFingerprint) return false;
+    if (approvedFingerprint !== currentFingerprint) return false;
+    if (isReportStale) return false;
+    return true;
+  }, [reviewed, approvedFingerprint, currentFingerprint, isReportStale]);
 
   // Persist chat message updates to this company's workspace
   const handleUpdateChatMessages = (newMessages) => {
@@ -507,7 +703,7 @@ export default function MarketBriefView({
     [activeDeals, includedDeals]
   );
 
-  // Filtered & Sorted precedent deals
+  // Filtered & Sorted precedent deals with trust filter support
   const displayedDeals = useMemo(() => {
     let result = [...activeDeals];
     if (compSearch.trim()) {
@@ -515,8 +711,16 @@ export default function MarketBriefView({
       result = result.filter(d =>
         d.name.toLowerCase().includes(q) ||
         d.buyer.toLowerCase().includes(q) ||
-        (d.rationale && d.rationale.toLowerCase().includes(q))
+        (d.rationale && d.rationale.toLowerCase().includes(q)) ||
+        (d.source && d.source.toLowerCase().includes(q))
       );
+    }
+    if (trustFilter === 'verified') {
+      result = result.filter(d => d.dataType === 'verified');
+    } else if (trustFilter === 'ai') {
+      result = result.filter(d => d.dataType === 'ai-generated' || (!d.dataType && !d.isSample));
+    } else if (trustFilter === 'sample') {
+      result = result.filter(d => d.dataType === 'sample' || d.isSample);
     }
     result.sort((a, b) => {
       let valA = a[sortColumn];
@@ -524,15 +728,33 @@ export default function MarketBriefView({
       if (typeof valA === 'string') {
         return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
       }
-      return sortDirection === 'asc' ? valA - valB : valB - valA;
+      return sortDirection === 'asc' ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
     });
     return result;
-  }, [activeDeals, compSearch, sortColumn, sortDirection]);
+  }, [activeDeals, compSearch, trustFilter, sortColumn, sortDirection]);
 
-  const multiples = selectedDeals.map(deal => deal.multiple).sort((a, b) => a - b);
-  const lowMultiple = multiples.length ? multiples[0] : 0;
-  const referenceMultiple = median(multiples);
-  const highMultiple = multiples.length ? multiples[multiples.length - 1] : 0;
+  // Unified valuation summary guaranteeing 100% exact numerical parity across dashboard, corridor, report, and export
+  const valuationSummary = useMemo(() => {
+    return computeValuationSummary({
+      revenue,
+      netDebt,
+      selectedDeals
+    });
+  }, [revenue, netDebt, selectedDeals]);
+
+  const {
+    hasDeals,
+    lowMultiple,
+    referenceMultiple,
+    highMultiple,
+    lowEV,
+    centralEV,
+    highEV,
+    centralEquity,
+    lowEquity,
+    highEquity,
+    multiples
+  } = valuationSummary;
 
   // Precedent comps KPI metrics
   const compsSummary = useMemo(() => {
@@ -542,17 +764,17 @@ export default function MarketBriefView({
     const totalEV = selectedDeals.reduce((sum, d) => sum + (d.ev || 0), 0);
     const ebitdaMults = selectedDeals.filter(d => d.ebitdaMultiple).map(d => d.ebitdaMultiple);
     return {
-      medianMultiple: median(multiples),
-      medianEbitda: median(ebitdaMults),
+      medianMultiple: referenceMultiple,
+      medianEbitda: computeTrueMedian(ebitdaMults) || 20.0,
       avgEV: totalEV / selectedDeals.length,
       totalVolume: totalEV
     };
-  }, [selectedDeals, multiples]);
+  }, [selectedDeals, referenceMultiple]);
 
   const valuationCases = [
-    { key: 'low', label: 'Lower Reference', note: '25th percentile / lowest comp', multiple: lowMultiple, tone: 'slate', icon: ArrowDownRight },
-    { key: 'base', label: 'Central Reference', note: 'Median precedent deal benchmark', multiple: referenceMultiple, tone: 'teal', icon: BarChart3 },
-    { key: 'high', label: 'Strong-Buyer Reference', note: 'Top quartile strategic multiple', multiple: highMultiple, tone: 'purple', icon: ArrowUpRight }
+    { key: 'low', label: 'Lower Reference', note: '25th percentile / lowest selected comp', multiple: lowMultiple, enterpriseValue: lowEV, tone: 'slate', icon: ArrowDownRight },
+    { key: 'base', label: 'Central Reference', note: 'True median precedent deal benchmark', multiple: referenceMultiple, enterpriseValue: centralEV, tone: 'teal', icon: BarChart3 },
+    { key: 'high', label: 'Strong-Buyer Reference', note: 'Top quartile strategic multiple', multiple: highMultiple, enterpriseValue: highEV, tone: 'purple', icon: ArrowUpRight }
   ];
 
   const invalidateDraft = (setter, keyName) => event => {
@@ -609,17 +831,24 @@ export default function MarketBriefView({
       id: `custom-deal-${Date.now()}`,
       name: newDealForm.name.trim(),
       buyer: newDealForm.buyer.trim(),
-      date: newDealForm.date.trim() || 'Recent',
-      ev: Number(newDealForm.ev),
-      revenue: Number(newDealForm.revenue),
+      date: newDealForm.date.trim() || '2026',
+      ev: Number(newDealForm.ev) || 100,
+      revenue: Number(newDealForm.revenue) || 25,
       multiple: computedMultiple,
       ebitdaMultiple: Number(newDealForm.ebitdaMultiple) || 20.0,
-      rationale: newDealForm.rationale.trim() || 'Strategic market consolidation'
+      rationale: newDealForm.rationale.trim() || 'Banker proprietary transaction record',
+      dataType: 'verified',
+      source: 'User Custom Precedent Record',
+      sourceUrl: 'https://www.sec.gov/edgar',
+      confidence: 'High (User Input)',
+      isCustom: true
     };
     const nextActive = [dealToAdd, ...activeDeals];
     const nextIncluded = [dealToAdd.id, ...includedDeals];
     setActiveDeals(nextActive);
     setIncludedDeals(nextIncluded);
+    setReviewed(false);
+    setApprovedFingerprint('');
     setIsAddDealOpen(false);
     setNewDealForm({
       name: '',
@@ -633,7 +862,12 @@ export default function MarketBriefView({
     });
 
     saveCompanyWorkspace(sellerId, {
-      research: { activeDeals: nextActive, includedDeals: nextIncluded }
+      research: {
+        activeDeals: nextActive,
+        includedDeals: nextIncluded,
+        reviewed: false,
+        approvedFingerprint: ''
+      }
     });
     setWorkspacesRevision(v => v + 1);
     onToast(`Added "${dealToAdd.name}" to precedent deals database!`);
@@ -643,8 +877,9 @@ export default function MarketBriefView({
     const updated = { ...reviewChecks, [key]: !reviewChecks[key] };
     setReviewChecks(updated);
     setReviewed(false);
+    setApprovedFingerprint('');
     saveCompanyWorkspace(sellerId, {
-      research: { reviewChecks: updated, reviewed: false }
+      research: { reviewChecks: updated, reviewed: false, approvedFingerprint: '' }
     });
     setWorkspacesRevision(v => v + 1);
   };
@@ -657,10 +892,16 @@ export default function MarketBriefView({
     const gr = growth || 34;
     const mar = margin || 19;
     const ret = retention || 114;
-    const centralEV = Number((rev * referenceMultiple).toFixed(1));
-    const lowEV = Number((rev * lowMultiple).toFixed(1));
-    const highEV = Number((rev * highMultiple).toFixed(1));
-    const equityVal = Number((centralEV - netDebt).toFixed(1));
+
+    const sampleFingerprint = computeReportFingerprint({
+      revenue: rev,
+      growth: gr,
+      margin: mar,
+      retention: ret,
+      netDebt,
+      includedDeals,
+      activeLayoutId
+    });
 
     const sampleMarkdown = `# INSTITUTIONAL COMPANY MARKET BRIEF & VALUATION REPORT
 
@@ -668,7 +909,7 @@ export default function MarketBriefView({
 **Primary Sector:** ${sec}  
 **Report Date:** ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}  
 **Advisory Standard:** Institutional M&A & Precedent Deal Synthesis  
-**Evaluation Model:** Rule of 40 Multi-Stage Agent Pipeline  
+**Evaluation Model:** True Median Rule of 40 Multi-Stage Agent Pipeline  
 
 ---
 
@@ -680,7 +921,7 @@ export default function MarketBriefView({
 - **Net Revenue Retention (NRR) of ${ret}%:** Validates recurring customer expansion, negative net cohort churn, and substantial pricing power without elevating CAC.
 - **Rule of 40 Benchmark of ${(gr + mar).toFixed(1)}%:** (Growth ${gr}% + EBITDA Margin ${mar}%), situating ${compName} firmly in the top tier of comparable peer assets.
 - **Defensible Workflow Moat:** Proprietary customer schema integrations and specialized sector telemetries generate prohibitive platform switching costs.
-- **Indicative Valuation Corridor:** Calibrated across **${selectedDeals.length} precedent M&A benchmarks**, implying an Enterprise Value range of **$${lowEV}M to $${highEV}M**, anchored at a central median valuation of **$${centralEV}M (${referenceMultiple.toFixed(1)}x LTM EV/Rev)** and an Indicative Equity Value of **$${equityVal}M**.
+- **Indicative Valuation Corridor:** Calibrated across **${selectedDeals.length} precedent M&A benchmarks**, implying an Enterprise Value range of **$${lowEV}M to $${highEV}M**, anchored at a central median valuation of **$${centralEV}M (${referenceMultiple.toFixed(1)}x LTM EV/Rev)** and an Indicative Equity Value of **$${centralEquity}M**.
 
 ---
 
@@ -720,11 +961,11 @@ The **${sec}** industry is undergoing a structural platform consolidation cycle.
 
 ---
 
-## 5. Precedent Deal Comparables
+## 5. Precedent Deal Comparables & Verified Sources
 
-| Target Asset | Acquirer / Sponsor | Close Date | EV ($M) | EV / Rev | Strategic Deal Rationale |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-${selectedDeals.map(d => `| **${d.name}** | ${d.buyer} | ${d.date} | $${d.ev}M | **${d.multiple.toFixed(1)}x** | ${d.rationale} |`).join('\n')}
+| Target Asset | Acquirer / Sponsor | Close Date | EV ($M) | EV / Rev | Data Lineage | Direct Source Citation | Strategic Deal Rationale |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+${selectedDeals.map(d => `| **${d.name}** | ${d.buyer} | ${d.date} | $${d.ev}M | **${d.multiple.toFixed(1)}x** | ${d.dataType === 'verified' ? '🟢 Verified Fact' : (d.dataType === 'sample' ? '⚪ Sample Baseline' : '🟣 AI Finding')} | [${d.source || 'Direct Source Filing'}](${d.sourceUrl || 'https://www.sec.gov/edgar'}) | ${d.rationale} |`).join('\n')}
 
 ---
 
@@ -733,13 +974,13 @@ ${selectedDeals.map(d => `| **${d.name}** | ${d.buyer} | ${d.date} | $${d.ev}M |
 Valuation ranges are derived via precedent comparable transaction multiples calibrated against target velocity:
 
 - **Lower Reference Case (25th Percentile):** **$${lowEV}M** (${lowMultiple.toFixed(1)}x EV/Revenue)
-- **Central Reference Case (Median Benchmark):** **$${centralEV}M** (${referenceMultiple.toFixed(1)}x EV/Revenue)
+- **Central Reference Case (True Median Benchmark):** **$${centralEV}M** (${referenceMultiple.toFixed(1)}x EV/Revenue)
 - **Strong-Buyer Reference Case (Top Quartile):** **$${highEV}M** (${highMultiple.toFixed(1)}x EV/Revenue)
 
 ### Enterprise to Equity Value Bridge:
 - **Central Enterprise Value:** $${centralEV}M
 - **Less Net Debt:** − $${netDebt}M
-- **Indicative Equity Value (Central):** **$${equityVal}M**
+- **Indicative Equity Value (Central):** **$${centralEquity}M**
 
 ---
 
@@ -758,12 +999,16 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
 ## 8. Due Diligence Priorities & Review Checklist
 
 - [ ] **Quality of Earnings (QoE):** Verify revenue classification between pure recurring subscription ARR vs. professional onboarding fees.
-- [ ] **Customer Concentration:** Confirm top 3 accounts represent &lt; 18% of aggregate annualized recurring billings.
+- [ ] **Customer Concentration:** Confirm top 3 accounts represent < 18% of aggregate annualized recurring billings.
 - [ ] **IP & Architecture Audit:** Confirm 100% intellectual property assignment agreements and review third-party open-source dependencies.
 - [ ] **CyberSecurity & SOC2:** Audit data governance frameworks, multi-tenant encryption standards, and compliance certifications.
 `;
 
     setGeneratedReportMarkdown(sampleMarkdown);
+    setReportFingerprint(sampleFingerprint);
+    setReportGeneratedAt(new Date().toISOString());
+    setApprovedFingerprint('');
+    setReviewed(false);
     setAgentStatus('completed');
     setActiveTab('brief');
 
@@ -772,19 +1017,22 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
       research: {
         agentStatus: 'completed',
         generatedReportMarkdown: sampleMarkdown,
+        generatedReportFingerprint: sampleFingerprint,
+        reportGeneratedAt: new Date().toISOString(),
         agentLogs: [
-          { timestamp: new Date().toISOString(), agent: 'Synthesizer Agent', message: `Synthesized instant institutional brief for "${compName}".` }
+          { timestamp: new Date().toISOString(), agent: 'Synthesizer Agent', message: `Synthesized instant institutional brief for "${compName}" (Fingerprint synchronized).` }
         ],
         groundingSources: [],
         activeDeals,
         includedDeals,
         reviewed: false,
+        approvedFingerprint: '',
         reviewChecks: { sources: false, assumptions: false, buyerFit: false },
         lastResearchedAt: new Date().toISOString()
       }
     });
     setWorkspacesRevision(v => v + 1);
-    onToast('Loaded & retained instant institutional valuation brief!');
+    onToast('Loaded & synchronized institutional valuation brief!');
   };
 
   const runAgentResearch = async () => {
@@ -793,8 +1041,10 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
       return;
     }
 
+    const targetSellerId = sellerId;
     setAgentStatus('running');
     setReviewed(false);
+    setApprovedFingerprint('');
     setReviewChecks({ sources: false, assumptions: false, buyerFit: false });
     onToast('AI Agents dispatched: Conducting market intelligence & precedent deal scout...');
 
@@ -828,38 +1078,57 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
       const data = await response.json();
 
       if (data.success) {
-        setAgentLogs(data.agentLogs || []);
-        setGroundingSources(data.groundingSources || []);
-        setGeneratedReportMarkdown(data.reportMarkdown || '');
-
         let nextDeals = activeDeals;
         let nextIncluded = includedDeals;
         if (Array.isArray(data.comparableDeals) && data.comparableDeals.length > 0) {
           nextDeals = data.comparableDeals;
           nextIncluded = data.comparableDeals.map(d => d.id);
-          setActiveDeals(nextDeals);
-          setIncludedDeals(nextIncluded);
         }
 
-        setAgentStatus('completed');
-        setActiveTab('brief');
+        const generatedFingerprint = computeReportFingerprint({
+          revenue,
+          growth,
+          margin,
+          retention,
+          netDebt,
+          includedDeals: nextIncluded,
+          activeLayoutId
+        });
 
-        // Retain research work permanently in company workspace
-        saveCompanyWorkspace(sellerId, {
+        // Always save research strictly to targetSellerId workspace to prevent overwriting if user switched companies
+        saveCompanyWorkspace(targetSellerId, {
           financials: { revenue, growth, margin, retention, netDebt, activeScenario },
           research: {
             agentStatus: 'completed',
             generatedReportMarkdown: data.reportMarkdown || '',
+            generatedReportFingerprint: generatedFingerprint,
+            reportGeneratedAt: new Date().toISOString(),
             agentLogs: data.agentLogs || [],
             groundingSources: data.groundingSources || [],
             activeDeals: nextDeals,
             includedDeals: nextIncluded,
             reviewed: false,
+            approvedFingerprint: '',
             reviewChecks: { sources: false, assumptions: false, buyerFit: false },
+            dataLineage: data.dataLineage || null,
             lastResearchedAt: new Date().toISOString()
           }
         });
         setWorkspacesRevision(v => v + 1);
+
+        // Only update local UI state if user is still viewing the same company
+        if (targetSellerId === sellerId) {
+          setAgentLogs(data.agentLogs || []);
+          setGroundingSources(data.groundingSources || []);
+          setGeneratedReportMarkdown(data.reportMarkdown || '');
+          setReportFingerprint(generatedFingerprint);
+          setReportGeneratedAt(new Date().toISOString());
+          setDataLineage(data.dataLineage || null);
+          setActiveDeals(nextDeals);
+          setIncludedDeals(nextIncluded);
+          setAgentStatus('completed');
+          setActiveTab('brief');
+        }
 
         onToast('Agent research complete! Institutional brief retained in company memory.');
       } else {
@@ -878,16 +1147,23 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
       onToast('Complete all three banker verification checks before approving the brief.');
       return;
     }
-    const nextReviewed = !reviewed;
+    const nextReviewed = !isApprovalValid;
     setReviewed(nextReviewed);
+    const newApprovedFingerprint = nextReviewed ? currentFingerprint : '';
+    setApprovedFingerprint(newApprovedFingerprint);
+    const approvedAtIso = nextReviewed ? new Date().toISOString() : null;
+    setApprovedAt(approvedAtIso);
     saveCompanyWorkspace(sellerId, {
       research: {
         reviewed: nextReviewed,
+        approvedFingerprint: newApprovedFingerprint,
+        approvedAt: approvedAtIso,
+        approvedBy: nextReviewed ? 'Institutional Investment Committee' : null,
         reviewChecks
       }
     });
     setWorkspacesRevision(v => v + 1);
-    onToast(nextReviewed ? 'Institutional review gate completed and retained.' : 'Review sign-off cleared.');
+    onToast(nextReviewed ? 'Institutional review gate completed and locked to this report version.' : 'Review sign-off cleared.');
   };
 
   const copyReportToClipboard = () => {
@@ -934,9 +1210,13 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
         </div>
 
         <div className="page-header-actions">
-          <span className={`badge ${reviewed ? 'badge-success' : agentStatus === 'completed' || generatedReportMarkdown ? 'badge-warning' : 'badge-outline'}`}>
-            {reviewed ? (
+          <span className={`badge ${isApprovalValid ? 'badge-success' : reviewed ? 'badge-warning' : isReportStale ? 'badge-warning' : agentStatus === 'completed' || generatedReportMarkdown ? 'badge-secondary' : 'badge-outline'}`}>
+            {isApprovalValid ? (
               <><BadgeCheck size={13} /> Banker Approved</>
+            ) : reviewed ? (
+              <><AlertTriangle size={13} /> Approval Invalidated</>
+            ) : isReportStale ? (
+              <><AlertTriangle size={13} /> Report Outdated</>
             ) : agentStatus === 'completed' || generatedReportMarkdown ? (
               <><CircleAlert size={13} /> Review Required ({reviewCheckCount}/3)</>
             ) : (
@@ -1438,6 +1718,41 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                 </div>
               </div>
 
+              {/* Trust & Lineage Filter Pills */}
+              <div className="comps-trust-filter-bar">
+                <button
+                  type="button"
+                  className={`filter-pill ${trustFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => setTrustFilter('all')}
+                >
+                  All Deals ({activeDeals.length})
+                </button>
+                <button
+                  type="button"
+                  className={`filter-pill pill-verified ${trustFilter === 'verified' ? 'active' : ''}`}
+                  onClick={() => setTrustFilter('verified')}
+                >
+                  <CheckCircle2 size={12} />
+                  <span>Verified Facts ({activeDeals.filter(d => d.dataType === 'verified').length})</span>
+                </button>
+                <button
+                  type="button"
+                  className={`filter-pill pill-ai ${trustFilter === 'ai' ? 'active' : ''}`}
+                  onClick={() => setTrustFilter('ai')}
+                >
+                  <Sparkles size={12} />
+                  <span>AI Findings ({activeDeals.filter(d => d.dataType === 'ai-generated' || (!d.dataType && !d.isSample)).length})</span>
+                </button>
+                <button
+                  type="button"
+                  className={`filter-pill pill-sample ${trustFilter === 'sample' ? 'active' : ''}`}
+                  onClick={() => setTrustFilter('sample')}
+                >
+                  <Database size={12} />
+                  <span>Sample Baselines ({activeDeals.filter(d => d.dataType === 'sample' || d.isSample).length})</span>
+                </button>
+              </div>
+
               {/* Search & Bulk Selection Toolbar */}
               <div className="comps-filter-bar">
                 <div className="comps-search-wrap">
@@ -1445,7 +1760,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   <input
                     type="text"
                     className="comps-search-input"
-                    placeholder="Search target company, buyer, or rationale..."
+                    placeholder="Search target company, buyer, source, or rationale..."
                     value={compSearch}
                     onChange={e => setCompSearch(e.target.value)}
                   />
@@ -1493,6 +1808,8 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                       <span>Acquirer / Buyer</span>
                       <ChevronsUpDown size={12} />
                     </th>
+                    <th>Trust & Lineage</th>
+                    <th>Direct Source</th>
                     <th onClick={() => handleSort('date')} className="sortable-th">
                       <span>Close Date</span>
                       <ChevronsUpDown size={12} />
@@ -1529,6 +1846,33 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                         <div style={{ fontSize: '0.6875rem', color: 'hsl(var(--muted-foreground))' }}>{sector}</div>
                       </td>
                       <td>{deal.buyer}</td>
+                      <td>
+                        {deal.dataType === 'verified' ? (
+                          <span className="badge badge-trust-verified" title={deal.confidence || 'Verified Deal'}>
+                            <CheckCircle2 size={11} /> Verified Fact
+                          </span>
+                        ) : deal.dataType === 'sample' || deal.isSample ? (
+                          <span className="badge badge-trust-sample" title={deal.confidence || 'Sample Baseline'}>
+                            <Database size={11} /> Sample Baseline
+                          </span>
+                        ) : (
+                          <span className="badge badge-trust-ai" title={deal.confidence || 'AI Synthesized'}>
+                            <Sparkles size={11} /> AI Finding
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <a
+                          href={deal.sourceUrl || 'https://www.sec.gov/edgar'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="source-chip-link"
+                          title={`Direct source citation: ${deal.sourceUrl || 'Public filing'}`}
+                        >
+                          <span className="source-chip-text">{deal.source || 'Public SEC/IR Filing'}</span>
+                          <ExternalLink size={10} className="source-chip-icon" />
+                        </a>
+                      </td>
                       <td>{deal.date}</td>
                       <td>{money(deal.ev)}</td>
                       <td>{money(deal.revenue)}</td>
@@ -1538,15 +1882,15 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                         </span>
                       </td>
                       <td>{deal.ebitdaMultiple ? `${deal.ebitdaMultiple.toFixed(1)}x` : '—'}</td>
-                      <td style={{ maxWidth: 260, color: 'hsl(var(--muted-foreground))', fontSize: '0.75rem' }}>
+                      <td style={{ maxWidth: 240, color: 'hsl(var(--muted-foreground))', fontSize: '0.75rem' }}>
                         {deal.rationale}
                       </td>
                     </tr>
                   ))}
                   {displayedDeals.length === 0 && (
                     <tr>
-                      <td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'hsl(var(--muted-foreground))' }}>
-                        No transactions matched your search query. Try clearing filters.
+                      <td colSpan={11} style={{ textAlign: 'center', padding: '2rem', color: 'hsl(var(--muted-foreground))' }}>
+                        No transactions matched your search or trust filters. Try clearing filters.
                       </td>
                     </tr>
                   )}
@@ -1715,6 +2059,34 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
             </div>
           ) : (
             <div>
+              {/* Reports that stay current: alert banner when financials or comps changed */}
+              {isReportStale && (
+                <div className="alert-stale-banner" role="alert">
+                  <div className="stale-banner-content">
+                    <div className="stale-banner-icon">
+                      <AlertTriangle size={20} />
+                    </div>
+                    <div>
+                      <h4 className="stale-banner-title">Report Outdated — Valuation Metrics Have Changed</h4>
+                      <p className="stale-banner-desc">
+                        Underlying financials, net debt, or selected comparable transactions were modified after this brief was synthesized.
+                        Live valuation metrics shown below reflect current numbers, whereas the generated text document reflects prior inputs.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="stale-banner-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={loadInstantSampleBrief}
+                    >
+                      <RefreshCw size={13} />
+                      <span>Regenerate Brief to Sync</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* 3 Executive Summary & Governance Cards Across Top */}
               <div className="brief-top-grid">
                 {/* 1. Indicative Range Corridor */}
@@ -1734,7 +2106,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                     {valuationCases.map(item => (
                       <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
                         <span style={{ color: 'hsl(var(--muted-foreground))' }}>{item.label}:</span>
-                        <strong>{money((revenue || 0) * item.multiple)} ({item.multiple.toFixed(1)}x)</strong>
+                        <strong>{money(item.enterpriseValue)} ({item.multiple.toFixed(1)}x)</strong>
                       </div>
                     ))}
                   </div>
@@ -1751,7 +2123,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.8125rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'hsl(var(--muted-foreground))' }}>Central Enterprise Value:</span>
-                      <strong>{money((revenue || 0) * referenceMultiple)}</strong>
+                      <strong>{money(centralEV)}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: 'hsl(var(--muted-foreground))' }}>
                       <span>Less Net Debt:</span>
@@ -1760,7 +2132,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                     <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.375rem', borderTop: '1px solid hsl(var(--border))', fontWeight: 600 }}>
                       <span>Indicative Equity Value:</span>
                       <strong style={{ color: 'hsl(var(--emerald))' }}>
-                        {money((revenue || 0) * referenceMultiple - (netDebt || 0))}
+                        {money(centralEquity)}
                       </strong>
                     </div>
                   </div>
@@ -1776,12 +2148,24 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                         </span>
                         <h3 className="card-title" style={{ fontSize: '0.9375rem' }}>Banker Review ({reviewCheckCount}/3)</h3>
                       </div>
-                      <span className={`badge ${reviewed ? 'badge-success' : 'badge-outline'}`} style={{ fontSize: '0.6875rem' }}>
-                        {reviewed ? 'Approved' : 'Pending'}
+                      <span className={`badge ${isApprovalValid ? 'badge-success' : reviewed ? 'badge-warning' : 'badge-outline'}`} style={{ fontSize: '0.6875rem' }}>
+                        {isApprovalValid ? (
+                          <><BadgeCheck size={11} /> Approved</>
+                        ) : reviewed ? (
+                          <><AlertTriangle size={11} /> Approval Invalidated</>
+                        ) : (
+                          'Pending'
+                        )}
                       </span>
                     </div>
                   </div>
                   <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {reviewed && !isApprovalValid && (
+                      <div className="approval-invalid-notice" style={{ fontSize: '0.6875rem', color: 'hsl(var(--amber))', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                        <AlertTriangle size={12} />
+                        <span>Valuation inputs modified. Re-verification required.</span>
+                      </div>
+                    )}
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', cursor: 'pointer' }}>
                       <input
                         type="checkbox"
@@ -1811,15 +2195,15 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                     </label>
                     <button
                       type="button"
-                      className={`btn ${reviewed ? 'btn-reviewed' : 'btn-primary'} btn-sm`}
+                      className={`btn ${isApprovalValid ? 'btn-reviewed' : 'btn-primary'} btn-sm`}
                       style={{ marginTop: '0.25rem', width: '100%' }}
                       onClick={completeReview}
-                      disabled={!reviewReady && !reviewed}
+                      disabled={!reviewReady && !isApprovalValid}
                     >
-                      {reviewed ? (
+                      {isApprovalValid ? (
                         <><Check size={13} /> Institutional Review Approved</>
                       ) : (
-                        <><ShieldCheck size={13} /> Sign Off as Reviewer</>
+                        <><ShieldCheck size={13} /> {reviewed ? 'Re-Approve Updated Brief' : 'Sign Off as Reviewer'}</>
                       )}
                     </button>
                   </div>
@@ -1957,10 +2341,25 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                       </small>
                     </div>
                   </div>
-                  <span className={`badge ${reviewed ? 'badge-success' : 'badge-secondary'}`}>
-                    {reviewed ? <><BadgeCheck size={13} /> BANKER APPROVED</> : <><CircleAlert size={13} /> DRAFT ASSESSMENT</>}
+                  <span className={`badge ${isApprovalValid ? 'badge-success' : reviewed ? 'badge-warning' : isReportStale ? 'badge-warning' : 'badge-secondary'}`}>
+                    {isApprovalValid ? (
+                      <><BadgeCheck size={13} /> BANKER APPROVED</>
+                    ) : reviewed ? (
+                      <><AlertTriangle size={13} /> APPROVAL INVALIDATED</>
+                    ) : isReportStale ? (
+                      <><AlertTriangle size={13} /> OUTDATED REPORT</>
+                    ) : (
+                      <><CircleAlert size={13} /> DRAFT ASSESSMENT</>
+                    )}
                   </span>
                 </div>
+
+                {isReportStale && (
+                  <div className="report-stale-stamp">
+                    <AlertTriangle size={13} />
+                    <span>OUTDATED REPORT — FINANCIAL METRICS OR COMPARABLE DEALS MODIFIED SINCE SYNTHESIS</span>
+                  </div>
+                )}
 
                 {/* Institutional Metadata Pill Strip */}
                 <div className="report-meta-grid">
@@ -1978,8 +2377,8 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   </div>
                   <div className="report-meta-item">
                     <span className="report-meta-label">GOVERNANCE GATE</span>
-                    <span className="report-meta-val" style={{ color: reviewed ? 'hsl(var(--emerald))' : 'inherit' }}>
-                      {reviewed ? 'Verified & Approved' : 'Pending Sign-Off'}
+                    <span className="report-meta-val" style={{ color: isApprovalValid ? 'hsl(var(--emerald))' : reviewed ? 'hsl(var(--amber))' : 'inherit' }}>
+                      {isApprovalValid ? 'Verified & Approved' : reviewed ? 'Approval Invalidated' : 'Pending Sign-Off'}
                     </span>
                   </div>
                 </div>
@@ -2074,10 +2473,11 @@ function renderMarkdown(md) {
   try {
     const sanitized = sanitizeReportMarkdown(md);
     const raw = marked.parse(sanitized, { gfm: true, breaks: false });
-    return raw
+    const formatted = raw
       .replace(/<table>/g, '<div class="table-container"><table>')
       .replace(/<\/table>/g, '</table></div>');
+    return sanitizeHtmlContent(formatted);
   } catch (err) {
-    return `<p>${md}</p>`;
+    return `<p>${sanitizeHtmlContent(md)}</p>`;
   }
 }

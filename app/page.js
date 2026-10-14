@@ -11,6 +11,7 @@ import CustomCompanyModal from './custom-company-modal';
 import KnowledgeBaseModal from './knowledge-base-modal';
 import SkillsModal from './skills-modal';
 import ReportLayoutsModal from './report-layouts-modal';
+import { clearCompanyWorkspace } from './workspace-store';
 
 // Initial pre-loaded industry presets
 const defaultCompanies = [
@@ -286,31 +287,53 @@ export default function Home() {
   // Initialize theme, AI settings, and state from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      // 1. Load Custom Companies
       try {
+        const storedCustom = localStorage.getItem('dealbrief_custom_companies_v1');
+        if (storedCustom) {
+          const parsed = JSON.parse(storedCustom);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCompanies([...parsed, ...defaultCompanies]);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load custom companies:', e);
+      }
+
+      // 2. Load AI Settings and Purge Permanent Keys from localStorage
+      try {
+        // Security: Remove any legacy permanent API keys from localStorage
+        localStorage.removeItem('gemini_api_key');
         const storedAi = localStorage.getItem('ai_provider_settings');
         if (storedAi) {
           const parsed = JSON.parse(storedAi);
+          // Strip out keys from localStorage if any were inadvertently saved
+          if (parsed.keys) {
+            delete parsed.keys;
+            localStorage.setItem('ai_provider_settings', JSON.stringify(parsed));
+          }
           const loadedModels = { ...(parsed.models || {}) };
           if (!loadedModels.gemini || loadedModels.gemini.includes('2.5')) {
             loadedModels.gemini = 'gemini-3.8-flash';
           }
           setAiSettings(prev => ({
             ...prev,
-            ...parsed,
-            keys: { ...prev.keys, ...(parsed.keys || {}) },
+            activeProvider: parsed.activeProvider || prev.activeProvider,
             models: { ...prev.models, ...loadedModels }
           }));
-        } else {
-          const storedKey = localStorage.getItem('gemini_api_key');
-          if (storedKey) {
-            setAiSettings(prev => ({
-              ...prev,
-              keys: { ...prev.keys, gemini: storedKey }
-            }));
-          }
+        }
+
+        // Safer Data Handling: Load API keys strictly from ephemeral sessionStorage
+        const sessionKeysRaw = sessionStorage.getItem('dealbrief_session_keys');
+        if (sessionKeysRaw) {
+          const sessionKeys = JSON.parse(sessionKeysRaw);
+          setAiSettings(prev => ({
+            ...prev,
+            keys: { ...prev.keys, ...(sessionKeys || {}) }
+          }));
         }
       } catch (e) {
-        console.error('Failed to load AI settings from storage:', e);
+        console.error('Failed to load AI settings or session keys:', e);
       }
 
       const savedTheme = localStorage.getItem('shadcn_theme');
@@ -384,12 +407,21 @@ export default function Home() {
       }
     };
     setAiSettings(cleanSettings);
+
     if (typeof window !== 'undefined') {
-      localStorage.setItem('ai_provider_settings', JSON.stringify(cleanSettings));
-      if (cleanSettings.keys?.gemini) {
-        localStorage.setItem('gemini_api_key', cleanSettings.keys.gemini);
+      // Security: Only persist non-sensitive preferences (activeProvider, models) in localStorage
+      const safePreferences = {
+        activeProvider: cleanSettings.activeProvider,
+        models: cleanSettings.models
+      };
+      localStorage.setItem('ai_provider_settings', JSON.stringify(safePreferences));
+
+      // Security: Store sensitive API keys ONLY in ephemeral sessionStorage (wiped on tab/browser close)
+      if (cleanSettings.keys) {
+        sessionStorage.setItem('dealbrief_session_keys', JSON.stringify(cleanSettings.keys));
       }
     }
+
     const provNames = {
       gemini: 'Google Gemini',
       openai: 'OpenAI (ChatGPT)',
@@ -401,15 +433,37 @@ export default function Home() {
     const activeModel = newSettings.models?.[newSettings.activeProvider] || '';
     const hasKey = Boolean(newSettings.keys?.[newSettings.activeProvider]);
     if (hasKey) {
-      setToast(`AI Settings saved! Active Engine: ${activeProv} (${activeModel})`);
+      setToast(`AI Settings saved in session memory! Active Engine: ${activeProv} (${activeModel})`);
     } else {
       setToast(`AI Settings saved for ${activeProv}. Running in Domain Simulator until key is configured.`);
     }
   };
 
   const handleAddCompany = (newCompany) => {
-    setCompanies(prev => [newCompany, ...prev]);
-    setToast(`Added "${newCompany.name}" to active targets!`);
+    setCompanies(prev => {
+      const updated = [newCompany, ...prev];
+      try {
+        const customOnly = updated.filter(c => c.isCustom);
+        localStorage.setItem('dealbrief_custom_companies_v1', JSON.stringify(customOnly));
+      } catch (e) {
+        console.error('Failed to persist custom company:', e);
+      }
+      return updated;
+    });
+    setToast(`Added "${newCompany.name}" to active targets (persisted across refreshes)!`);
+  };
+
+  const handleDeleteCompany = (companyId) => {
+    setCompanies(prev => {
+      const updated = prev.filter(c => c.id !== companyId);
+      try {
+        const customOnly = updated.filter(c => c.isCustom);
+        localStorage.setItem('dealbrief_custom_companies_v1', JSON.stringify(customOnly));
+      } catch (e) {}
+      return updated;
+    });
+    clearCompanyWorkspace(companyId);
+    setToast('Target removed from active workspace.');
   };
 
   const handleUpdateKnowledgeBase = (updated) => {
@@ -674,6 +728,7 @@ export default function Home() {
         onToast={setToast}
         onOpenCustomModal={() => setIsCustomModalOpen(true)}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+        onDeleteCompany={handleDeleteCompany}
         apiKey={activeKey}
         aiSettings={aiSettings}
         knowledgeBase={knowledgeBase}
