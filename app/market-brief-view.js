@@ -456,6 +456,7 @@ export default function MarketBriefView({
   onOpenApiKeyModal = () => {},
   apiKey = '',
   aiSettings = null,
+  serverConfigured = {},
   knowledgeBase = [],
   skills = [],
   reportLayouts = [],
@@ -2435,6 +2436,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
           providerId={aiSettings?.activeProvider || 'gemini'}
           modelId={aiSettings?.models?.[aiSettings?.activeProvider] || ''}
           aiSettings={aiSettings}
+          serverConfigured={serverConfigured}
           onToast={onToast}
         />
       )}

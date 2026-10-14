@@ -11,7 +11,8 @@ export default function ApiKeyModal({
   isOpen,
   onClose,
   aiSettings,
-  onSaveSettings
+  onSaveSettings,
+  serverConfigured = {}
 }) {
   const [selectedProviderId, setSelectedProviderId] = useState('gemini');
   const [activeProviderId, setActiveProviderId] = useState('gemini');
@@ -57,6 +58,7 @@ export default function ApiKeyModal({
   const currentProvider = PROVIDERS[selectedProviderId] || PROVIDERS.gemini;
   const currentKey = keys[selectedProviderId] || '';
   const currentModel = models[selectedProviderId] || currentProvider.defaultModel;
+  const hasServerKey = Boolean(serverConfigured?.[selectedProviderId]);
 
   const handleKeyChange = (val) => {
     setKeys(prev => ({ ...prev, [selectedProviderId]: val }));
@@ -70,12 +72,12 @@ export default function ApiKeyModal({
 
   const handleTest = async () => {
     const keyToTest = (currentKey || '').trim();
-    if (!keyToTest) {
+    if (!keyToTest && !hasServerKey) {
       setVerifyStatus(prev => ({
         ...prev,
         [selectedProviderId]: {
           success: false,
-          message: `Please enter an API key for ${currentProvider.name} to test connection.`
+          message: `Please enter an API key or configure ${currentProvider.envVar} in Vercel to test connection.`
         }
       }));
       return;
@@ -90,7 +92,7 @@ export default function ApiKeyModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           providerId: selectedProviderId,
-          apiKey: keyToTest,
+          apiKey: keyToTest || undefined,
           modelId: currentModel
         })
       });
@@ -100,7 +102,9 @@ export default function ApiKeyModal({
           ...prev,
           [selectedProviderId]: {
             success: true,
-            message: `Connected successfully to ${data.provider} (${data.model})!`
+            message: keyToTest
+              ? `Connected successfully to ${data.provider} (${data.model})!`
+              : `Connected successfully to ${data.provider} (${data.model}) via Vercel Environment Variables!`
           }
         }));
       } else {
@@ -187,7 +191,9 @@ export default function ApiKeyModal({
             {providerList.map(prov => {
               const isSelected = selectedProviderId === prov.id;
               const isActive = activeProviderId === prov.id;
-              const hasKey = Boolean(keys[prov.id]);
+              const hasServer = Boolean(serverConfigured?.[prov.id]);
+              const hasClient = Boolean(keys[prov.id]);
+              const isConfigured = hasServer || hasClient;
 
               return (
                 <button
@@ -232,8 +238,8 @@ export default function ApiKeyModal({
                      prov.id === 'claude' ? 'Claude' :
                      prov.id === 'grok' ? 'Grok' : 'Perplexity'}
                   </span>
-                  <span style={{ fontSize: '0.625rem', color: hasKey ? '#10b981' : 'hsl(var(--muted-foreground))' }}>
-                    {hasKey ? 'Configured' : 'Offline'}
+                  <span style={{ fontSize: '0.625rem', color: isConfigured ? '#10b981' : 'hsl(var(--muted-foreground))' }}>
+                    {hasServer ? 'Vercel Env' : (hasClient ? 'Session' : 'Offline')}
                   </span>
                 </button>
               );
@@ -257,6 +263,11 @@ export default function ApiKeyModal({
                   <span className="badge badge-secondary" style={{ fontSize: '0.625rem' }}>
                     {currentProvider.tag}
                   </span>
+                  {hasServerKey && (
+                    <span className="badge badge-success" style={{ fontSize: '0.625rem', padding: '0.05rem 0.35rem' }}>
+                      Vercel Active
+                    </span>
+                  )}
                 </div>
                 <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: 'hsl(var(--muted-foreground))' }}>
                   {selectedProviderId === 'gemini' && 'Google Search Grounding for live financial data and company intelligence.'}
@@ -282,6 +293,32 @@ export default function ApiKeyModal({
               </button>
             </div>
 
+            {/* Vercel Environment Variable Active Callout */}
+            {hasServerKey && (
+              <div
+                style={{
+                  padding: '0.65rem 0.85rem',
+                  borderRadius: '6px',
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  color: '#10b981',
+                  fontSize: '0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  marginBottom: '0.875rem'
+                }}
+              >
+                <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+                <div>
+                  <strong>Vercel Environment Variable Active ({currentProvider.envVar})</strong>
+                  <div style={{ color: 'var(--foreground)', opacity: 0.9, fontSize: '0.7rem', marginTop: '1px' }}>
+                    This key is stored permanently in Vercel. It will never be wiped across sessions or browser refreshes.
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Model Selector */}
             <div className="form-field" style={{ marginBottom: '0.875rem' }}>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>Model Version</label>
@@ -303,12 +340,12 @@ export default function ApiKeyModal({
             {/* API Key Input */}
             <div className="form-field" style={{ marginBottom: '0.625rem' }}>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>
-                {currentProvider.name} API Key
+                {currentProvider.name} API Key {hasServerKey ? '(Optional Override)' : ''}
               </label>
               <div className="input-wrapper" style={{ position: 'relative' }}>
                 <input
                   type={showKey ? 'text' : 'password'}
-                  placeholder={currentProvider.keyPlaceholder}
+                  placeholder={hasServerKey ? `Active via Vercel (${currentProvider.envVar})` : currentProvider.keyPlaceholder}
                   value={currentKey}
                   onChange={e => handleKeyChange(e.target.value)}
                   style={{ fontSize: '0.8125rem', height: '2.25rem', paddingRight: '2.5rem' }}
@@ -335,7 +372,11 @@ export default function ApiKeyModal({
                 </button>
               </div>
               <span className="form-hint" style={{ fontSize: '0.6875rem' }}>
-                🔒 <strong>Session-Only Memory:</strong> Held temporarily in active tab memory (<code>sessionStorage</code>). Never saved permanently to disk (<code>localStorage</code>).
+                {hasServerKey ? (
+                  <>☁️ <strong>Server-Managed Key:</strong> Authenticated directly through Vercel environment variables. Never wiped on session close.</>
+                ) : (
+                  <>🔒 <strong>Session-Only Memory:</strong> Held temporarily in active tab memory (<code>sessionStorage</code>).</>
+                )}
               </span>
             </div>
 
@@ -422,7 +463,7 @@ export default function ApiKeyModal({
               type="button"
               className="btn btn-outline btn-sm"
               onClick={handleTest}
-              disabled={isVerifying || !currentKey.trim()}
+              disabled={isVerifying || (!currentKey.trim() && !hasServerKey)}
             >
               {isVerifying ? <Loader2 size={13} className="spin-slow" /> : <Sparkles size={13} />}
               <span>{isVerifying ? 'Verifying...' : `Test ${currentProvider.name}`}</span>

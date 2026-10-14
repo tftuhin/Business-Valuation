@@ -238,6 +238,17 @@ export default function Home() {
   // Zero-Database Workspace Vault state
   const [isVaultModalOpen, setIsVaultModalOpen] = useState(false);
 
+  // Server-side Vercel Environment Variables detection state (cached in localStorage to eliminate flicker across reloads)
+  const [serverConfigured, setServerConfigured] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('dealbrief_server_configured');
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return {};
+  });
+
   // Dropdown menu state
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -405,6 +416,19 @@ export default function Home() {
       } catch (e) {
         console.error('Failed to load layouts from storage:', e);
       }
+
+      // Automatically query server-side Vercel Environment Variables and cache locally
+      fetch('/api/verify-key')
+        .then(res => res.json())
+        .then(data => {
+          if (data?.serverConfigured) {
+            setServerConfigured(data.serverConfigured);
+            try {
+              localStorage.setItem('dealbrief_server_configured', JSON.stringify(data.serverConfigured));
+            } catch (e) {}
+          }
+        })
+        .catch(() => {});
     }
   }, []);
 
@@ -457,8 +481,11 @@ export default function Home() {
     };
     const activeProv = provNames[newSettings.activeProvider] || 'Google Gemini';
     const activeModel = newSettings.models?.[newSettings.activeProvider] || '';
-    const hasKey = Boolean(newSettings.keys?.[newSettings.activeProvider]);
-    if (hasKey) {
+    const hasServerKey = Boolean(serverConfigured[newSettings.activeProvider]);
+    const hasKey = Boolean(newSettings.keys?.[newSettings.activeProvider]) || hasServerKey;
+    if (hasServerKey) {
+      setToast(`AI Settings saved! Active Engine: ${activeProv} (${activeModel || 'Default'}) via persistent Vercel environment variables.`);
+    } else if (hasKey) {
       setToast(`AI Settings saved in session memory! Active Engine: ${activeProv} (${activeModel})`);
     } else {
       setToast(`AI Settings saved for ${activeProv}. Running in Domain Simulator until key is configured.`);
@@ -541,7 +568,8 @@ export default function Home() {
     perplexity: 'Perplexity'
   };
   const activeProviderLabel = provLabels[activeProvider] || 'Gemini';
-  const hasActiveKey = Boolean(activeKey);
+  const hasServerKey = Boolean(serverConfigured[activeProvider]);
+  const hasActiveKey = Boolean(activeKey) || hasServerKey;
 
   return (
     <main className="standalone-shell">
@@ -565,7 +593,12 @@ export default function Home() {
               type="button"
               className="btn btn-outline btn-sm nav-model-pill"
               onClick={() => setIsApiKeyModalOpen(true)}
-              title={`Active AI: ${activeProviderLabel} (${activeModel || 'Default'}). Click to switch provider or enter keys.`}
+              title={hasServerKey
+                ? `Active AI: ${activeProviderLabel} (${activeModel || 'Default'}) · Active via Vercel Environment Variables (Persistent across all sessions).`
+                : (hasActiveKey
+                  ? `Active AI: ${activeProviderLabel} (${activeModel || 'Default'}) · Active via session key.`
+                  : `Active AI: ${activeProviderLabel}. Running in Domain Simulator. Click to configure key.`)
+              }
             >
               <span
                 className="status-dot-pulse"
@@ -575,7 +608,7 @@ export default function Home() {
               />
               <span className="nav-model-name">{activeProviderLabel}</span>
               <span className={`badge ${hasActiveKey ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '0.625rem', padding: '0.05rem 0.35rem' }}>
-                {hasActiveKey ? 'Live AI' : 'Offline'}
+                {hasServerKey ? 'Vercel AI' : (hasActiveKey ? 'Live AI' : 'Offline')}
               </span>
             </button>
 
@@ -795,6 +828,7 @@ export default function Home() {
         onDeleteCompany={handleDeleteCompany}
         apiKey={activeKey}
         aiSettings={aiSettings}
+        serverConfigured={serverConfigured}
         knowledgeBase={knowledgeBase}
         skills={skills}
         reportLayouts={reportLayouts}
@@ -813,6 +847,7 @@ export default function Home() {
         onClose={() => setIsApiKeyModalOpen(false)}
         aiSettings={aiSettings}
         onSaveSettings={handleSaveAiSettings}
+        serverConfigured={serverConfigured}
       />
 
       {/* Custom Company Dialog */}

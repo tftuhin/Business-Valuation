@@ -21,6 +21,7 @@ export default function AgentChatView({
   providerId = 'gemini',
   modelId = '',
   aiSettings = null,
+  serverConfigured = {},
   onToast = () => {}
 }) {
   const welcomeMessage = useMemo(() => ({
@@ -208,6 +209,11 @@ How can I assist your diligence or valuation analysis today? Select a categorize
         </div>
 
         <div className="chat-context-right">
+          {Boolean(serverConfigured[providerId]) && (
+            <span className="badge badge-success" style={{ fontSize: '0.6875rem', gap: '0.2rem' }}>
+              <ShieldCheck size={10} /> Vercel Managed
+            </span>
+          )}
           <span className="badge badge-outline" style={{ fontSize: '0.6875rem' }}>
             {aiSettings?.activeProvider ? `${aiSettings.activeProvider.toUpperCase()} Grounded` : 'Gemini AI'}
           </span>

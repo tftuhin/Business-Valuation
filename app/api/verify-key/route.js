@@ -30,3 +30,18 @@ export async function POST(request) {
     }, { status: 400 });
   }
 }
+
+export async function GET() {
+  const serverConfigured = {
+    gemini: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    openai: Boolean(process.env.OPENAI_API_KEY?.trim()),
+    claude: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
+    grok: Boolean(process.env.XAI_API_KEY?.trim() || process.env.GROK_API_KEY?.trim()),
+    perplexity: Boolean(process.env.PERPLEXITY_API_KEY?.trim() || process.env.PPLX_API_KEY?.trim())
+  };
+
+  return Response.json({
+    serverConfigured,
+    hasAnyServerKey: Object.values(serverConfigured).some(Boolean)
+  });
+}
