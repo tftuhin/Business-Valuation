@@ -117,6 +117,22 @@ function money(value) {
   return `$${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1, minimumFractionDigits: 0 }).format(value)}M`;
 }
 
+function formatCardRev(value) {
+  if (value === undefined || value === null || value === '') return '$25M';
+  const str = String(value).trim();
+  if (str.startsWith('$') && str.endsWith('M')) return str;
+  const num = parseAmountM(str);
+  return money(num);
+}
+
+function formatCardGrowth(value) {
+  if (value === undefined || value === null || value === '') return '30%';
+  const str = String(value).trim();
+  if (str.endsWith('%')) return str;
+  const num = parsePercent(str);
+  return `${num}%`;
+}
+
 // True statistical median handling even and odd array lengths
 export function computeTrueMedian(values) {
   if (!values || !values.length) return 0;
@@ -644,18 +660,32 @@ export default function MarketBriefView({
   // Persist financial metric adjustments
   const persistFinancials = (partialFin) => {
     setSaveIndicator('saving');
+    const mergedFin = {
+      revenue,
+      growth,
+      margin,
+      retention,
+      netDebt,
+      activeScenario,
+      ...partialFin
+    };
     saveCompanyWorkspace(sellerId, {
-      financials: {
-        revenue,
-        growth,
-        margin,
-        retention,
-        netDebt,
-        activeScenario,
-        ...partialFin
-      }
+      financials: mergedFin
     });
     setWorkspacesRevision(v => v + 1);
+
+    if (onUpdateCompany && seller) {
+      onUpdateCompany({
+        ...seller,
+        revenue: formatCardRev(mergedFin.revenue),
+        growth: formatCardGrowth(mergedFin.growth),
+        margin: `${mergedFin.margin}%`,
+        retention: `${mergedFin.retention}%`,
+        netDebt: mergedFin.netDebt,
+        sector: (seller.isCustom && sectorInput) ? sectorInput : seller.sector
+      });
+    }
+
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       setSaveIndicator('saved');
@@ -1282,6 +1312,20 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
             const hasReport = isMounted && Boolean(ws?.research?.generatedReportMarkdown);
             const chatCount = isMounted ? (ws?.chat?.messages?.length || 0) : 0;
 
+            // Live reactive metric resolution
+            const cardRev = isSelected
+              ? formatCardRev(revenue)
+              : formatCardRev(ws?.financials?.revenue ?? item.revenue);
+            const cardGrowth = isSelected
+              ? formatCardGrowth(growth)
+              : formatCardGrowth(ws?.financials?.growth ?? item.growth);
+            const cardRetention = isSelected
+              ? `${retention}%`
+              : (ws?.financials?.retention ? `${ws.financials.retention}%` : (item.retention || '112%'));
+            const cardSector = isSelected && item.isCustom && sectorInput
+              ? sectorInput
+              : (item.sector || 'Enterprise Software');
+
             return (
               <button
                 key={item.id}
@@ -1291,7 +1335,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
               >
                 <div
                   className="preset-avatar"
-                  style={{ background: getSectorGradient(item.sector) }}
+                  style={{ background: getSectorGradient(cardSector) }}
                 >
                   {item.initials || 'CO'}
                 </div>
@@ -1304,16 +1348,16 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                       </span>
                     )}
                   </div>
-                  <span className="preset-sector">{item.sector}</span>
+                  <span className="preset-sector">{cardSector}</span>
                   <div className="preset-metrics-chips">
-                    <span>{item.revenue || '$25M'} Rev</span>
-                    <span>{item.growth || '30%'} YoY</span>
+                    <span>{cardRev} Rev</span>
+                    <span>{cardGrowth} YoY</span>
                     {hasReport ? (
                       <span className="preset-badge-highlight">✓ Brief</span>
                     ) : chatCount > 0 ? (
                       <span className="preset-badge-highlight">💬 {chatCount}</span>
                     ) : (
-                      <span>{item.retention || '112%'} NRR</span>
+                      <span>{cardRetention} NRR</span>
                     )}
                   </div>
                 </div>
