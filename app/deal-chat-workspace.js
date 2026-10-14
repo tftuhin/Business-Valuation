@@ -1419,82 +1419,179 @@ I have synthesized market intelligence, verified precedent transactions, and gen
 
                 <div className="assumption-input-group">
                   <div className="assumption-header">
-                    <label>LTM Revenue ($M)</label>
-                    <span className="assumption-val">${revenue}M</span>
+                    <label htmlFor="input-assumption-revenue">LTM Revenue ($M)</label>
                   </div>
-                  <input
-                    type="range"
-                    min="5"
-                    max="150"
-                    step="1"
-                    value={revenue}
-                    onChange={e => handleUpdateFinancials({ revenue: Number(e.target.value) })}
-                    className="assumption-slider"
-                  />
+                  <div className="assumption-controls-row">
+                    <input
+                      type="range"
+                      min="0"
+                      max="300"
+                      step="0.1"
+                      value={revenue}
+                      onChange={e => handleUpdateFinancials({ revenue: Number(parseFloat(e.target.value).toFixed(1)) })}
+                      className="assumption-slider"
+                      aria-label="LTM Revenue slider"
+                    />
+                    <div className="assumption-typed-wrap">
+                      <span className="typed-symbol">$</span>
+                      <input
+                        id="input-assumption-revenue"
+                        type="number"
+                        min="0"
+                        max="10000"
+                        step="any"
+                        value={revenue}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                          handleUpdateFinancials({ revenue: isNaN(val) ? 0 : Math.max(0, val) });
+                        }}
+                        className="assumption-typed-input"
+                        aria-label="LTM Revenue in Millions"
+                      />
+                      <span className="typed-symbol">M</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="assumption-input-group">
                   <div className="assumption-header">
-                    <label>YoY Revenue Growth (%)</label>
-                    <span className="assumption-val">{growth}%</span>
+                    <label htmlFor="input-assumption-growth">YoY Revenue Growth (%)</label>
                   </div>
-                  <input
-                    type="range"
-                    min="5"
-                    max="100"
-                    step="1"
-                    value={growth}
-                    onChange={e => handleUpdateFinancials({ growth: Number(e.target.value) })}
-                    className="assumption-slider"
-                  />
+                  <div className="assumption-controls-row">
+                    <input
+                      type="range"
+                      min="0"
+                      max="150"
+                      step="0.1"
+                      value={growth}
+                      onChange={e => handleUpdateFinancials({ growth: Number(parseFloat(e.target.value).toFixed(1)) })}
+                      className="assumption-slider"
+                      aria-label="YoY Revenue Growth slider"
+                    />
+                    <div className="assumption-typed-wrap">
+                      <input
+                        id="input-assumption-growth"
+                        type="number"
+                        min="0"
+                        max="500"
+                        step="any"
+                        value={growth}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                          handleUpdateFinancials({ growth: isNaN(val) ? 0 : Math.max(0, val) });
+                        }}
+                        className="assumption-typed-input"
+                        aria-label="YoY Revenue Growth percentage"
+                      />
+                      <span className="typed-symbol">%</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="assumption-input-group">
                   <div className="assumption-header">
-                    <label>EBITDA Margin (%)</label>
-                    <span className="assumption-val">{margin}%</span>
+                    <label htmlFor="input-assumption-margin">EBITDA Margin (%)</label>
                   </div>
-                  <input
-                    type="range"
-                    min="-10"
-                    max="50"
-                    step="1"
-                    value={margin}
-                    onChange={e => handleUpdateFinancials({ margin: Number(e.target.value) })}
-                    className="assumption-slider"
-                  />
+                  <div className="assumption-controls-row">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={margin}
+                      onChange={e => handleUpdateFinancials({ margin: Number(parseFloat(e.target.value).toFixed(1)) })}
+                      className="assumption-slider"
+                      aria-label="EBITDA Margin slider"
+                    />
+                    <div className="assumption-typed-wrap">
+                      <input
+                        id="input-assumption-margin"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="any"
+                        value={margin}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                          handleUpdateFinancials({ margin: isNaN(val) ? 0 : Math.max(0, val) });
+                        }}
+                        className="assumption-typed-input"
+                        aria-label="EBITDA Margin percentage"
+                      />
+                      <span className="typed-symbol">%</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="assumption-input-group">
                   <div className="assumption-header">
-                    <label>Net Revenue Retention (NRR %)</label>
-                    <span className="assumption-val">{retention}%</span>
+                    <label htmlFor="input-assumption-retention">Net Revenue Retention (NRR %)</label>
                   </div>
-                  <input
-                    type="range"
-                    min="80"
-                    max="150"
-                    step="1"
-                    value={retention}
-                    onChange={e => handleUpdateFinancials({ retention: Number(e.target.value) })}
-                    className="assumption-slider"
-                  />
+                  <div className="assumption-controls-row">
+                    <input
+                      type="range"
+                      min="0"
+                      max="200"
+                      step="0.1"
+                      value={retention}
+                      onChange={e => handleUpdateFinancials({ retention: Number(parseFloat(e.target.value).toFixed(1)) })}
+                      className="assumption-slider"
+                      aria-label="Net Revenue Retention slider"
+                    />
+                    <div className="assumption-typed-wrap">
+                      <input
+                        id="input-assumption-retention"
+                        type="number"
+                        min="0"
+                        max="300"
+                        step="any"
+                        value={retention}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                          handleUpdateFinancials({ retention: isNaN(val) ? 0 : Math.max(0, val) });
+                        }}
+                        className="assumption-typed-input"
+                        aria-label="Net Revenue Retention percentage"
+                      />
+                      <span className="typed-symbol">%</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="assumption-input-group">
                   <div className="assumption-header">
-                    <label>Net Debt ($M)</label>
-                    <span className="assumption-val">${netDebt}M</span>
+                    <label htmlFor="input-assumption-debt">Net Debt ($M)</label>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="50"
-                    step="1"
-                    value={netDebt}
-                    onChange={e => handleUpdateFinancials({ netDebt: Number(e.target.value) })}
-                    className="assumption-slider"
-                  />
+                  <div className="assumption-controls-row">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={netDebt}
+                      onChange={e => handleUpdateFinancials({ netDebt: Number(parseFloat(e.target.value).toFixed(1)) })}
+                      className="assumption-slider"
+                      aria-label="Net Debt slider"
+                    />
+                    <div className="assumption-typed-wrap">
+                      <span className="typed-symbol">$</span>
+                      <input
+                        id="input-assumption-debt"
+                        type="number"
+                        min="0"
+                        max="5000"
+                        step="any"
+                        value={netDebt}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                          handleUpdateFinancials({ netDebt: isNaN(val) ? 0 : Math.max(0, val) });
+                        }}
+                        className="assumption-typed-input"
+                        aria-label="Net Debt in Millions"
+                      />
+                      <span className="typed-symbol">M</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="sensitivity-recalc-action">

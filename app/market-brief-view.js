@@ -1172,8 +1172,8 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   hint="Base for EV/Revenue calculations"
                   onChange={invalidateDraft(setRevenue, 'revenue')}
                   onStep={(delta) => stepMetric(setRevenue, revenue, delta, 'revenue')}
-                  step={1}
-                  min={1}
+                  step={0.1}
+                  min={0}
                   max={500}
                 />
 
@@ -1184,7 +1184,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   hint="Compound growth velocity"
                   onChange={invalidateDraft(setGrowth, 'growth')}
                   onStep={(delta) => stepMetric(setGrowth, growth, delta, 'growth')}
-                  step={5}
+                  step={0.1}
                   min={0}
                   max={150}
                   showSlider={true}
@@ -1197,8 +1197,8 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   hint="Operating cash profitability margin"
                   onChange={invalidateDraft(setMargin, 'margin')}
                   onStep={(delta) => stepMetric(setMargin, margin, delta, 'margin')}
-                  step={2}
-                  min={-20}
+                  step={0.1}
+                  min={0}
                   max={60}
                   showSlider={true}
                 />
@@ -1210,8 +1210,8 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   hint="Bridge from Enterprise to Equity Value"
                   onChange={invalidateDraft(setNetDebt, 'netDebt')}
                   onStep={(delta) => stepMetric(setNetDebt, netDebt, delta, 'netDebt')}
-                  step={1}
-                  min={-100}
+                  step={0.1}
+                  min={0}
                   max={200}
                 />
 
@@ -1222,8 +1222,8 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   hint="Cohort expansion & customer health"
                   onChange={invalidateDraft(setRetention, 'retention')}
                   onStep={(delta) => stepMetric(setRetention, retention, delta, 'retention')}
-                  step={2}
-                  min={70}
+                  step={0.1}
+                  min={0}
                   max={160}
                 />
               </div>

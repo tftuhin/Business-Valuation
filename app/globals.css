@@ -4080,19 +4080,71 @@ textarea.input-textarea:focus {
 
 .assumption-header label {
   font-weight: 500;
+  color: hsl(var(--foreground));
 }
 
-.assumption-val {
-  font-weight: 700;
-  font-size: 0.75rem;
-  color: #10b981;
+.assumption-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
 }
 
 .assumption-slider {
-  width: 100%;
-  height: 4px;
+  flex: 1;
+  min-width: 0;
+  height: 5px;
   accent-color: #10b981;
   cursor: pointer;
+}
+
+.assumption-typed-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 3px);
+  padding: 0.15rem 0.35rem;
+  width: 78px;
+  min-width: 78px;
+  height: 26px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  flex-shrink: 0;
+}
+
+.assumption-typed-wrap:focus-within {
+  border-color: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.typed-symbol {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #10b981;
+  user-select: none;
+}
+
+.assumption-typed-input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: hsl(var(--foreground));
+  text-align: right;
+  outline: none;
+}
+
+.assumption-typed-input::-webkit-outer-spin-button,
+.assumption-typed-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.assumption-typed-input[type=number] {
+  -moz-appearance: textfield;
 }
 
 .spin-slow {
