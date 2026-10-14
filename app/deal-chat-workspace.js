@@ -30,12 +30,45 @@ export default function DealChatWorkspace({
   onOpenKnowledgeBaseModal = () => {},
   onOpenSkillsModal = () => {},
   onOpenCustomModal = () => {},
+  onAddCompany = () => {},
   isDarkMode = true,
   onToggleTheme = () => {},
   onToast = () => {}
 }) {
-  const [companies, setCompanies] = useState(initialCompanies);
-  const [activeCompanyId, setActiveCompanyId] = useState(initialCompanies[0]?.id || '');
+  const [companies, setCompanies] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('dealbrief_custom_companies_v1');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const existingIds = new Set(initialCompanies.map(c => c.id));
+            const customs = parsed.filter(c => !existingIds.has(c.id));
+            return [...customs, ...initialCompanies];
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return initialCompanies;
+  });
+
+  const [activeCompanyId, setActiveCompanyId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('dealbrief_custom_companies_v1');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed[0].id;
+          }
+        }
+      } catch (e) {}
+    }
+    return initialCompanies[0]?.id || '';
+  });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isCanvasOpen, setIsCanvasOpen] = useState(true);
@@ -90,18 +123,132 @@ export default function DealChatWorkspace({
   useEffect(() => {
     if (!activeCompany?.id) return;
     const ws = getCompanyWorkspace(activeCompany.id, activeCompany);
+    const isDraft = Boolean(activeCompany.isDraft || ws.financials?.isDraft);
 
-    setRevenue(ws.financials?.revenue ?? parseAmountM(activeCompany.revenue));
-    setGrowth(ws.financials?.growth ?? parsePercent(activeCompany.growth));
-    setMargin(ws.financials?.margin ?? parsePercent(activeCompany.margin));
-    setRetention(ws.financials?.retention ?? parsePercent(activeCompany.retention));
-    setNetDebt(ws.financials?.netDebt ?? (activeCompany.netDebt ?? 4));
+    setRevenue(ws.financials?.revenue !== undefined ? ws.financials.revenue : (isDraft ? 0 : parseAmountM(activeCompany.revenue)));
+    setGrowth(ws.financials?.growth !== undefined ? ws.financials.growth : (isDraft ? 0 : parsePercent(activeCompany.growth)));
+    setMargin(ws.financials?.margin !== undefined ? ws.financials.margin : (isDraft ? 0 : parsePercent(activeCompany.margin)));
+    setRetention(ws.financials?.retention !== undefined ? ws.financials.retention : (isDraft ? 100 : parsePercent(activeCompany.retention)));
+    setNetDebt(ws.financials?.netDebt !== undefined ? ws.financials.netDebt : (isDraft ? 0 : (activeCompany.netDebt ?? 4)));
 
     setReportMarkdown(ws.research?.generatedReportMarkdown || '');
     setComparableDeals(Array.isArray(ws.research?.activeDeals) && ws.research.activeDeals.length > 0 ? ws.research.activeDeals : getDefaultComps(activeCompany.sector));
     setGroundingSources(ws.research?.groundingSources || []);
     setChatMessages(Array.isArray(ws.chat?.messages) ? ws.chat.messages : []);
   }, [activeCompanyId]);
+
+  // Create New Target Session (Conversational Intake - No Modal!)
+  const handleCreateNewSession = () => {
+    const customCount = companies.filter(c => c.isCustom || c.isDraft).length + 1;
+    const newId = `target-${Date.now()}`;
+    const newCompany = {
+      id: newId,
+      name: `New Target ${customCount}`,
+      initials: '🎯',
+      sector: 'Sector Pending',
+      website: '',
+      revenue: '$0M',
+      growth: '0%',
+      margin: '0%',
+      retention: '100%',
+      netDebt: 0,
+      isDraft: true,
+      isCustom: true,
+      createdAt: new Date().toISOString()
+    };
+
+    const welcomeMsg = {
+      id: `welcome-${newId}`,
+      role: 'assistant',
+      content: `### 🎯 New Diligence Session Initiated
+Welcome! I am your **Autonomous Deal Intelligence & Valuation Copilot**.
+
+Let's build a live valuation model and institutional research dossier for this new target.
+
+1. **What is the company name and industry/sector?**
+   *(e.g., Acme Cloud AI, Enterprise SaaS, acmecloud.ai)*
+2. **What are their core financials?**
+   *(LTM Revenue, YoY Growth %, EBITDA Margin %, Net Debt)*
+
+*(You can answer step-by-step or send everything at once in a single message!)*`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    // Save into workspace store
+    saveCompanyWorkspace(newId, {
+      financials: { revenue: 0, growth: 0, margin: 0, retention: 100, netDebt: 0, isDraft: true },
+      research: {
+        agentStatus: 'idle',
+        generatedReportMarkdown: '',
+        agentLogs: [],
+        groundingSources: [],
+        activeDeals: getDefaultComps('Enterprise B2B SaaS & AI')
+      },
+      chat: {
+        messages: [welcomeMsg],
+        lastUpdated: new Date().toISOString()
+      }
+    });
+
+    const nextCompanies = [newCompany, ...companies];
+    setCompanies(nextCompanies);
+    setActiveCompanyId(newId);
+
+    // Reset local state for this new target
+    setRevenue(0);
+    setGrowth(0);
+    setMargin(0);
+    setRetention(100);
+    setNetDebt(0);
+    setReportMarkdown('');
+    setComparableDeals(getDefaultComps('Enterprise B2B SaaS & AI'));
+    setGroundingSources([]);
+    setChatMessages([welcomeMsg]);
+    setActiveCanvasTab('corridor');
+    setIsCanvasOpen(true);
+    setWorkspacesRev(v => v + 1);
+
+    // Persist to custom companies localStorage
+    try {
+      localStorage.setItem('dealbrief_custom_companies_v1', JSON.stringify(nextCompanies.filter(c => c.isCustom)));
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (onAddCompany) {
+      onAddCompany(newCompany);
+    }
+
+    if (windowWidth <= 840) {
+      setIsSidebarOpen(false);
+    }
+
+    onToast('New target session opened! Provide company details in chat.');
+  };
+
+  // Delete / Archive a custom or draft session
+  const handleDeleteSession = (companyId) => {
+    const targetComp = companies.find(c => c.id === companyId);
+    if (!targetComp) return;
+
+    clearCompanyWorkspace(companyId);
+    const updatedCompanies = companies.filter(c => c.id !== companyId);
+    setCompanies(updatedCompanies);
+
+    try {
+      localStorage.setItem('dealbrief_custom_companies_v1', JSON.stringify(updatedCompanies.filter(c => c.isCustom)));
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (activeCompanyId === companyId) {
+      const nextActive = updatedCompanies[0]?.id || '';
+      setActiveCompanyId(nextActive);
+    }
+
+    setWorkspacesRev(v => v + 1);
+    onToast(`Deleted session for "${targetComp.name}".`);
+  };
 
   // Chat Input & State
   const [input, setInput] = useState('');
@@ -130,10 +277,29 @@ export default function DealChatWorkspace({
   const medianEquity = Number((medianEV - netDebt).toFixed(1));
 
   // Default welcome message when chat is fresh
-  const defaultWelcomeMessage = useMemo(() => ({
-    id: `welcome-${activeCompany?.id || 'target'}`,
-    role: 'assistant',
-    content: `Hello! I am your **Autonomous Deal Intelligence & Valuation Copilot** for **${activeCompany?.name || 'Target Asset'}**.
+  const defaultWelcomeMessage = useMemo(() => {
+    if (activeCompany?.isDraft || revenue === 0) {
+      return {
+        id: `welcome-${activeCompany?.id || 'target'}`,
+        role: 'assistant',
+        content: `### 🎯 Diligence Session Initiated for **${activeCompany?.name || 'New Target'}**
+I am your **Autonomous Deal Intelligence & Valuation Copilot**.
+
+Let's calibrate a live valuation model and institutional research dossier for this company.
+
+1. **What is the company name and sector / industry?**
+   *(e.g., Acme Cloud AI, Enterprise SaaS, acmecloud.ai)*
+2. **What are their core financials?**
+   *(LTM Revenue, YoY Growth %, EBITDA Margin %, Net Debt)*
+
+*(Tip: You can answer step-by-step or send everything at once in a single message!)*`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+    }
+    return {
+      id: `welcome-${activeCompany?.id || 'target'}`,
+      role: 'assistant',
+      content: `Hello! I am your **Autonomous Deal Intelligence & Valuation Copilot** for **${activeCompany?.name || 'Target Asset'}**.
 
 I have structured a living research dossier for this company:
 * **Financial Baseline:** $${revenue}M LTM Revenue · ${growth}% YoY Growth · ${margin}% EBITDA · ${retention}% NRR.
@@ -141,8 +307,9 @@ I have structured a living research dossier for this company:
 * **Dossier Canvas:** ${reportMarkdown ? 'Institutional brief synthesized & live on the right canvas.' : 'Ready to analyze market dynamics and calculate valuation corridors.'}
 
 Ask me to analyze valuation multiples, stress-test growth or margins, identify strategic buyers, or draft investment committee memos.`,
-    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }), [activeCompany?.id, activeCompany?.name, revenue, growth, margin, retention, comparableDeals.length, Boolean(reportMarkdown)]);
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+  }, [activeCompany?.id, activeCompany?.name, activeCompany?.isDraft, revenue, growth, margin, retention, comparableDeals.length, Boolean(reportMarkdown)]);
 
   const displayedMessages = chatMessages.length > 0 ? chatMessages : [defaultWelcomeMessage];
 
@@ -180,7 +347,7 @@ Ask me to analyze valuation multiples, stress-test growth or margins, identify s
     setWorkspacesRev(v => v + 1);
   };
 
-  // Send Chat Query
+  // Send Chat Query with Conversational Target Parameter Extraction
   const handleSend = async (customText) => {
     const text = (customText || input).trim();
     if (!text || isLoading) return;
@@ -195,8 +362,129 @@ Ask me to analyze valuation multiples, stress-test growth or margins, identify s
     const nextMessages = [...displayedMessages, userMessage];
     persistChatMessages(nextMessages);
     setInput('');
-    setIsLoading(true);
 
+    // Extract any target entities from the user's message
+    const isTargetDraft = Boolean(activeCompany?.isDraft || revenue === 0);
+    const entities = extractTargetEntities(text, activeCompany, isTargetDraft);
+    const hasAnyEntity = Object.keys(entities).length > 0;
+
+    let updatedCompany = { ...activeCompany };
+    let companyChanged = false;
+
+    if (entities.name && entities.name !== activeCompany.name) {
+      updatedCompany.name = entities.name;
+      const words = entities.name.trim().split(/\s+/);
+      updatedCompany.initials = words.length > 1
+        ? (words[0][0] + words[1][0]).toUpperCase()
+        : entities.name.slice(0, 2).toUpperCase();
+      companyChanged = true;
+    }
+    if (entities.sector && entities.sector !== activeCompany.sector) {
+      updatedCompany.sector = entities.sector;
+      companyChanged = true;
+    }
+    if (entities.website) {
+      updatedCompany.website = entities.website;
+      companyChanged = true;
+    }
+
+    let nextRevenue = entities.revenue !== undefined ? entities.revenue : revenue;
+    let nextGrowth = entities.growth !== undefined ? entities.growth : growth;
+    let nextMargin = entities.margin !== undefined ? entities.margin : margin;
+    let nextRetention = entities.retention !== undefined ? entities.retention : retention;
+    let nextNetDebt = entities.netDebt !== undefined ? entities.netDebt : netDebt;
+
+    if (entities.revenue !== undefined) {
+      setRevenue(nextRevenue);
+      updatedCompany.revenue = `$${nextRevenue}M`;
+      companyChanged = true;
+    }
+    if (entities.growth !== undefined) {
+      setGrowth(nextGrowth);
+      updatedCompany.growth = `${nextGrowth}%`;
+      companyChanged = true;
+    }
+    if (entities.margin !== undefined) {
+      setMargin(nextMargin);
+      updatedCompany.margin = `${nextMargin}%`;
+      companyChanged = true;
+    }
+    if (entities.retention !== undefined) {
+      setRetention(nextRetention);
+      updatedCompany.retention = `${nextRetention}%`;
+      companyChanged = true;
+    }
+    if (entities.netDebt !== undefined) {
+      setNetDebt(nextNetDebt);
+      updatedCompany.netDebt = nextNetDebt;
+      companyChanged = true;
+    }
+
+    let nextComps = comparableDeals;
+    if (entities.sector) {
+      nextComps = getDefaultComps(entities.sector);
+      setComparableDeals(nextComps);
+    }
+
+    // Check if ready to exit draft
+    if (updatedCompany.isDraft && nextRevenue > 0 && updatedCompany.name && !updatedCompany.name.startsWith('New Target')) {
+      updatedCompany.isDraft = false;
+      companyChanged = true;
+    }
+
+    if (companyChanged) {
+      const updatedList = companies.map(c => c.id === activeCompany.id ? updatedCompany : c);
+      setCompanies(updatedList);
+      try {
+        localStorage.setItem('dealbrief_custom_companies_v1', JSON.stringify(updatedList.filter(c => c.isCustom)));
+      } catch (e) {}
+
+      saveCompanyWorkspace(activeCompany.id, {
+        financials: {
+          revenue: nextRevenue,
+          growth: nextGrowth,
+          margin: nextMargin,
+          retention: nextRetention,
+          netDebt: nextNetDebt,
+          isDraft: updatedCompany.isDraft
+        },
+        research: {
+          activeDeals: nextComps
+        }
+      });
+      setWorkspacesRev(v => v + 1);
+    }
+
+    // Conversational Intake Response (No modal required):
+    // If activeCompany was in draft, or revenue was 0, or new target parameters were provided during intake
+    if (isTargetDraft || (hasAnyEntity && (activeCompany?.isDraft || revenue === 0))) {
+      setIsLoading(true);
+      setTimeout(() => {
+        const assistantReply = generateConversationalIntakeReply({
+          entities,
+          company: updatedCompany,
+          revenue: nextRevenue,
+          growth: nextGrowth,
+          margin: nextMargin,
+          netDebt: nextNetDebt,
+          comparableDeals: nextComps
+        });
+
+        const assistantMessage = {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: assistantReply,
+          provider: 'M&A Deal Advisory Engine',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        persistChatMessages([...nextMessages, assistantMessage]);
+        setIsLoading(false);
+      }, 350);
+      return;
+    }
+
+    // Standard deep chat query
+    setIsLoading(true);
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -204,14 +492,14 @@ Ask me to analyze valuation multiples, stress-test growth or margins, identify s
         body: JSON.stringify({
           messages: nextMessages,
           company: {
-            ...activeCompany,
-            revenue,
-            growth,
-            margin,
-            retention,
-            netDebt
+            ...updatedCompany,
+            revenue: nextRevenue,
+            growth: nextGrowth,
+            margin: nextMargin,
+            retention: nextRetention,
+            netDebt: nextNetDebt
           },
-          comparableDeals,
+          comparableDeals: nextComps,
           knowledgeBase: (knowledgeBase || []).filter(k => k.enabled),
           skills: (skills || []).filter(s => s.enabled),
           researchReport: reportMarkdown,
@@ -332,14 +620,36 @@ I have synthesized market intelligence, verified precedent transactions, and gen
     onToast(`Cleared conversation for "${activeCompany?.name}".`);
   };
 
-  // Quick Starters
-  const starterPrompts = [
-    { label: '📊 Precedent Multiples', query: `Analyze precedent M&A benchmark multiples for ${activeCompany?.name} and explain the median valuation spread.` },
-    { label: '🔍 Diligence Checklist', query: `What are the top 3 financial and operational diligence red flags to audit before issuing an LOI for ${activeCompany?.name}?` },
-    { label: '🏢 Strategic Consolidators', query: `Identify the top 4 strategic and financial sponsor acquirers most likely to bid for ${activeCompany?.name} and explain their acquisition rationale.` },
-    { label: '⚡ Stress-Test (20% Growth)', query: `If ${activeCompany?.name} revenue growth contracts to 20% over the next 12 months, what is the impact on Enterprise Value and EBITDA multiples?` },
-    { label: '📑 Draft Executive Teaser', query: `Draft a confidential 1-page executive acquisition teaser for PE sponsors highlighting ${activeCompany?.name}'s unit economics and moat.` }
-  ];
+  // Quick Starters (Dynamic: Fast-track intake templates for draft mode vs deep diligence for established targets)
+  const starterPrompts = useMemo(() => {
+    if (activeCompany?.isDraft || revenue === 0) {
+      return [
+        {
+          label: '🚀 Acme Cloud AI ($25M Rev, 40% Growth)',
+          query: 'The company is Acme Cloud AI, Enterprise SaaS, acmecloud.ai, $25M revenue, 40% YoY growth, 18% EBITDA margin, $2M net debt.'
+        },
+        {
+          label: '🏥 CarePulse Health ($18M Rev, 25% Growth)',
+          query: 'Target is CarePulse Health, Digital Health EHR, carepulse.com, $18M revenue, 25% growth, 15% EBITDA, zero debt.'
+        },
+        {
+          label: '💳 FinBridge Pay ($35M Rev, 50% Growth)',
+          query: 'FinBridge Pay, FinTech & B2B Payments, finbridge.io, $35M revenue, 50% growth, 22% EBITDA margin, $4M net debt.'
+        },
+        {
+          label: '🛡️ SentinelDefense ($40M Rev, 35% Growth)',
+          query: 'SentinelDefense, CyberSecurity & Zero-Trust, sentineldefense.io, $40M revenue, 35% growth, 20% EBITDA, $1M net debt.'
+        }
+      ];
+    }
+    return [
+      { label: '📊 Precedent Multiples', query: `Analyze precedent M&A benchmark multiples for ${activeCompany?.name} and explain the median valuation spread.` },
+      { label: '🔍 Diligence Checklist', query: `What are the top 3 financial and operational diligence red flags to audit before issuing an LOI for ${activeCompany?.name}?` },
+      { label: '🏢 Strategic Consolidators', query: `Identify the top 4 strategic and financial sponsor acquirers most likely to bid for ${activeCompany?.name} and explain their acquisition rationale.` },
+      { label: '⚡ Stress-Test (20% Growth)', query: `If ${activeCompany?.name} revenue growth contracts to 20% over the next 12 months, what is the impact on Enterprise Value and EBITDA multiples?` },
+      { label: '📑 Draft Executive Teaser', query: `Draft a confidential 1-page executive acquisition teaser for PE sponsors highlighting ${activeCompany?.name}'s unit economics and moat.` }
+    ];
+  }, [activeCompany?.isDraft, activeCompany?.name, revenue]);
 
   const filteredCompanies = companies.filter(c =>
     (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -386,8 +696,8 @@ I have synthesized market intelligence, verified precedent transactions, and gen
             <button
               type="button"
               className="btn btn-primary btn-xs"
-              onClick={onOpenCustomModal}
-              title="Add New Target Research Session"
+              onClick={handleCreateNewSession}
+              title="Add New Target (Conversational Intake)"
             >
               <Plus size={12} />
               <span>New</span>
@@ -446,10 +756,11 @@ I have synthesized market intelligence, verified precedent transactions, and gen
                 <div className="session-info">
                   <div className="session-title-row">
                     <span className="session-name">{comp.name}</span>
+                    {comp.isDraft && <span className="session-draft-pill">Intake</span>}
                     {hasReport && <span className="session-verified-dot" title="Institutional brief ready" />}
                   </div>
                   <span className="session-meta">
-                    {comp.revenue || '$25M'} · {comp.sector}
+                    {comp.revenue || '$0M'} · {comp.sector}
                   </span>
                 </div>
 
@@ -457,6 +768,20 @@ I have synthesized market intelligence, verified precedent transactions, and gen
                   <span className="session-msg-badge" title={`${msgCount} messages stored`}>
                     {msgCount}
                   </span>
+                )}
+
+                {(comp.isCustom || comp.isDraft) && (
+                  <button
+                    type="button"
+                    className="session-delete-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteSession(comp.id);
+                    }}
+                    title="Delete session"
+                  >
+                    <Trash2 size={12} />
+                  </button>
                 )}
               </button>
             );
@@ -668,7 +993,11 @@ I have synthesized market intelligence, verified precedent transactions, and gen
             <textarea
               rows={2}
               className="workspace-textarea"
-              placeholder={`Ask the agent anything about ${activeCompany?.name || 'the target'}, adjust assumptions, or request M&A materials... (Enter to send)`}
+              placeholder={
+                activeCompany?.isDraft || revenue === 0
+                  ? `Tell the AI about ${activeCompany?.name || 'the target'} (e.g. name, sector, revenue, growth, EBITDA, debt)...`
+                  : `Ask the agent anything about ${activeCompany?.name || 'the target'}, adjust assumptions, or request M&A materials... (Enter to send)`
+              }
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => {
@@ -772,17 +1101,122 @@ I have synthesized market intelligence, verified precedent transactions, and gen
             {/* 1. VALUATION CORRIDOR TAB */}
             {activeCanvasTab === 'corridor' && (
               <div className="canvas-corridor-view">
+                {/* Onboarding Checklist for Target Intake */}
+                {(activeCompany?.isDraft || revenue === 0) && (
+                  <div className="card-sub-block onboarding-checklist-card">
+                    <div className="sub-block-title-row">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Sparkles size={13} style={{ color: 'hsl(var(--emerald))' }} />
+                        <span className="sub-block-title">Target Intake Checklist</span>
+                      </div>
+                      <span className="badge badge-secondary badge-xs">
+                        {[
+                          Boolean(activeCompany?.name && !activeCompany.name.startsWith('New Target')),
+                          Boolean(activeCompany?.sector && activeCompany.sector !== 'Sector Pending' && activeCompany.sector !== 'Discovery Phase'),
+                          revenue > 0,
+                          growth > 0,
+                          margin > 0,
+                          netDebt !== undefined
+                        ].filter(Boolean).length} of 6 Parameters Ready
+                      </span>
+                    </div>
+
+                    <div className="onboarding-progress-bar-wrap">
+                      <div
+                        className="onboarding-progress-bar-fill"
+                        style={{
+                          width: `${([
+                            Boolean(activeCompany?.name && !activeCompany.name.startsWith('New Target')),
+                            Boolean(activeCompany?.sector && activeCompany.sector !== 'Sector Pending' && activeCompany.sector !== 'Discovery Phase'),
+                            revenue > 0,
+                            growth > 0,
+                            margin > 0,
+                            netDebt !== undefined
+                          ].filter(Boolean).length / 6) * 100}%`
+                        }}
+                      />
+                    </div>
+
+                    <div className="onboarding-items-grid">
+                      <div className={`onboarding-item ${activeCompany?.name && !activeCompany.name.startsWith('New Target') ? 'is-complete' : 'is-pending'}`}>
+                        {activeCompany?.name && !activeCompany.name.startsWith('New Target') ? <CheckCircle2 size={13} className="text-emerald-500" /> : <Clock size={13} className="text-muted" />}
+                        <div className="onboarding-item-text">
+                          <span className="onboarding-label">Company Name</span>
+                          <span className="onboarding-value">{activeCompany?.name && !activeCompany.name.startsWith('New Target') ? activeCompany.name : 'Pending in chat...'}</span>
+                        </div>
+                      </div>
+
+                      <div className={`onboarding-item ${activeCompany?.sector && activeCompany.sector !== 'Sector Pending' && activeCompany.sector !== 'Discovery Phase' ? 'is-complete' : 'is-pending'}`}>
+                        {activeCompany?.sector && activeCompany.sector !== 'Sector Pending' && activeCompany.sector !== 'Discovery Phase' ? <CheckCircle2 size={13} className="text-emerald-500" /> : <Clock size={13} className="text-muted" />}
+                        <div className="onboarding-item-text">
+                          <span className="onboarding-label">Sector / Vertical</span>
+                          <span className="onboarding-value">{activeCompany?.sector && activeCompany.sector !== 'Sector Pending' && activeCompany.sector !== 'Discovery Phase' ? activeCompany.sector : 'Pending in chat...'}</span>
+                        </div>
+                      </div>
+
+                      <div className={`onboarding-item ${revenue > 0 ? 'is-complete' : 'is-pending'}`}>
+                        {revenue > 0 ? <CheckCircle2 size={13} className="text-emerald-500" /> : <Clock size={13} className="text-muted" />}
+                        <div className="onboarding-item-text">
+                          <span className="onboarding-label">LTM Revenue</span>
+                          <span className="onboarding-value">{revenue > 0 ? `$${revenue}M` : 'Pending in chat...'}</span>
+                        </div>
+                      </div>
+
+                      <div className={`onboarding-item ${growth > 0 ? 'is-complete' : 'is-pending'}`}>
+                        {growth > 0 ? <CheckCircle2 size={13} className="text-emerald-500" /> : <Clock size={13} className="text-muted" />}
+                        <div className="onboarding-item-text">
+                          <span className="onboarding-label">YoY Growth</span>
+                          <span className="onboarding-value">{growth > 0 ? `${growth}%` : 'Pending in chat...'}</span>
+                        </div>
+                      </div>
+
+                      <div className={`onboarding-item ${margin > 0 ? 'is-complete' : 'is-pending'}`}>
+                        {margin > 0 ? <CheckCircle2 size={13} className="text-emerald-500" /> : <Clock size={13} className="text-muted" />}
+                        <div className="onboarding-item-text">
+                          <span className="onboarding-label">EBITDA Margin</span>
+                          <span className="onboarding-value">{margin > 0 ? `${margin}%` : 'Pending in chat...'}</span>
+                        </div>
+                      </div>
+
+                      <div className={`onboarding-item ${netDebt !== undefined ? 'is-complete' : 'is-pending'}`}>
+                        {netDebt !== undefined ? <CheckCircle2 size={13} className="text-emerald-500" /> : <Clock size={13} className="text-muted" />}
+                        <div className="onboarding-item-text">
+                          <span className="onboarding-label">Net Debt</span>
+                          <span className="onboarding-value">{netDebt !== undefined ? `$${netDebt}M` : 'Pending in chat...'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="onboarding-hint-box">
+                      <Bot size={13} style={{ color: 'hsl(var(--primary))', flexShrink: 0 }} />
+                      <span>
+                        Provide target parameters directly in the chat, or click one of the quick starter templates below the chat box!
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="corridor-overview-banner">
                   <div>
                     <span className="corridor-banner-eyebrow">Enterprise Value Range</span>
-                    <h3 className="corridor-banner-val">{money(medianEV)}</h3>
+                    <h3 className="corridor-banner-val">{revenue > 0 ? money(medianEV) : 'Pending Metrics'}</h3>
                     <p className="corridor-banner-sub">
-                      Central reference implies <strong>{multiples.median.toFixed(1)}x EV/Revenue</strong> on ${revenue}M LTM revenue.
+                      {revenue > 0 ? (
+                        <>Central reference implies <strong>{multiples.median.toFixed(1)}x EV/Revenue</strong> on ${revenue}M LTM revenue.</>
+                      ) : (
+                        <>Provide target revenue and margins in the chat to calculate enterprise value.</>
+                      )}
                     </p>
                   </div>
-                  <span className="badge badge-success" style={{ height: 'fit-content' }}>
-                    Indicative Equity: {money(medianEquity)}
-                  </span>
+                  {revenue > 0 ? (
+                    <span className="badge badge-success" style={{ height: 'fit-content' }}>
+                      Indicative Equity: {money(medianEquity)}
+                    </span>
+                  ) : (
+                    <span className="badge badge-secondary" style={{ height: 'fit-content' }}>
+                      Intake Phase
+                    </span>
+                  )}
                 </div>
 
                 {/* Precedent Multiple Spread */}
@@ -1085,17 +1519,19 @@ I have synthesized market intelligence, verified precedent transactions, and gen
 
 // Helpers
 function parseAmountM(val) {
+  if (val === 0 || val === '0' || val === '$0M') return 0;
   const text = String(val ?? '').trim().toUpperCase();
   const num = Number.parseFloat(text.replace(/[^0-9.\-]/g, ''));
-  if (!Number.isFinite(num)) return 25;
+  if (!Number.isFinite(num)) return 0;
   if (text.includes('B')) return num * 1000;
   if (text.includes('K')) return num / 1000;
   return num;
 }
 
 function parsePercent(val) {
+  if (val === 0 || val === '0' || val === '0%') return 0;
   const num = Number.parseFloat(String(val ?? '').replace(/[^0-9.\-]/g, ''));
-  return Number.isFinite(num) ? num : 25;
+  return Number.isFinite(num) ? num : 0;
 }
 
 function money(val) {
@@ -1132,4 +1568,222 @@ function getDefaultComps(sector = '') {
     { id: 'g2', name: 'InsightSphere Analytics', buyer: 'Salesforce (MuleSoft)', date: 'Oct 2025', ev: 135, revenue: 30, multiple: 4.5, ebitdaMultiple: 22.5, rationale: 'Conversational reporting layer' },
     { id: 'g3', name: 'CloudScale Infrastructure', buyer: 'Datadog Systems', date: 'Jun 2025', ev: 155, revenue: 30, multiple: 5.2, ebitdaMultiple: 25.0, rationale: 'Multi-cloud observability' }
   ];
+}
+
+// Conversational Target Entity Extractor
+export function extractTargetEntities(text, currentCompany = {}, isDraft = false) {
+  const extracted = {};
+  const cleaned = text.trim();
+
+  // 1. Website / domain: e.g. stripe.com, https://acme.ai, www.nexus.io
+  const urlMatch = cleaned.match(/(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9][-a-zA-Z0-9]+\.(?:com|io|ai|co|org|net|app|tech|dev|cloud|health|finance))\b/i);
+  if (urlMatch) {
+    extracted.website = urlMatch[1].toLowerCase();
+  }
+
+  // 2. Revenue / ARR:
+  // e.g. "revenue is $25M", "rev: 25m", "$25M revenue", "ARR of $30M", "does 25 million in revenue"
+  const revPatterns = [
+    /(?:revenue|rev|arr|sales|topline|top-line)(?:\s*(?:is|of|:|around|=|approx|approx\.|\s))\s*\$?([0-9]+(?:\.[0-9]+)?)\s*(m|million|b|billion|k)?\b/i,
+    /\$([0-9]+(?:\.[0-9]+)?)\s*(m|million|b|billion)?\s*(?:in\s*)?(?:revenue|rev|arr|sales)\b/i,
+    /(?:revenue|rev|arr)\s*=\s*\$?([0-9]+(?:\.[0-9]+)?)\s*(m|million|b|billion)?\b/i
+  ];
+  for (const pat of revPatterns) {
+    const m = cleaned.match(pat);
+    if (m) {
+      let val = parseFloat(m[1]);
+      const unit = (m[2] || '').toLowerCase();
+      if (unit.startsWith('b')) val *= 1000;
+      if (unit.startsWith('k')) val /= 1000;
+      extracted.revenue = Number(val.toFixed(1));
+      break;
+    }
+  }
+
+  // 3. Growth:
+  // e.g. "growth is 35%", "growing at 40%", "growth: 30%", "35% yoy", "35% growth"
+  const growthPatterns = [
+    /(?:growth|growth rate|yoy growth|yoy|growing at)(?:\s*(?:is|of|:|around|=|approx|approx\.|\s))\s*([0-9]+(?:\.[0-9]+)?)\s*%?/i,
+    /([0-9]+(?:\.[0-9]+)?)\s*%\s*(?:yoy|growth|yoy growth)\b/i,
+    /(?:growth|yoy)\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*%?/i
+  ];
+  for (const pat of growthPatterns) {
+    const m = cleaned.match(pat);
+    if (m) {
+      extracted.growth = Number(parseFloat(m[1]).toFixed(1));
+      break;
+    }
+  }
+
+  // 4. EBITDA Margin:
+  // e.g. "ebitda is 20%", "margin is 18%", "ebitda margin: 25%", "20% ebitda", "15% margin"
+  const marginPatterns = [
+    /(?:ebitda margin|ebitda|margin|profit margin|operating margin)(?:\s*(?:is|of|:|around|=|approx|approx\.|\s))\s*([0-9]+(?:\.[0-9]+)?)\s*%?/i,
+    /([0-9]+(?:\.[0-9]+)?)\s*%\s*(?:ebitda|ebitda margin|margin)\b/i,
+    /(?:ebitda|margin)\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*%?/i
+  ];
+  for (const pat of marginPatterns) {
+    const m = cleaned.match(pat);
+    if (m) {
+      extracted.margin = Number(parseFloat(m[1]).toFixed(1));
+      break;
+    }
+  }
+
+  // 5. Net Debt:
+  // e.g. "net debt is $5M", "debt: $2M", "$3M net debt", "debt-free", "zero debt", "no debt"
+  if (/(?:debt-free|zero debt|no debt|\$0 debt|\$0 net debt|no net debt)/i.test(cleaned)) {
+    extracted.netDebt = 0;
+  } else {
+    const debtPatterns = [
+      /(?:net debt|debt|net-debt|borrowings)(?:\s*(?:is|of|:|around|=|approx|approx\.|\s))\s*\$?([0-9]+(?:\.[0-9]+)?)\s*(m|million|b|billion)?\b/i,
+      /\$([0-9]+(?:\.[0-9]+)?)\s*(m|million)?\s*(?:in\s*)?(?:net debt|debt)\b/i,
+      /(?:debt|net debt)\s*=\s*\$?([0-9]+(?:\.[0-9]+)?)\s*(m|million)?\b/i
+    ];
+    for (const pat of debtPatterns) {
+      const m = cleaned.match(pat);
+      if (m) {
+        let val = parseFloat(m[1]);
+        const unit = (m[2] || '').toLowerCase();
+        if (unit.startsWith('b')) val *= 1000;
+        extracted.netDebt = Number(val.toFixed(1));
+        break;
+      }
+    }
+  }
+
+  // 6. Retention / NRR:
+  const nrrPatterns = [
+    /(?:nrr|ndr|retention|net retention)(?:\s*(?:is|of|:|around|=|approx|approx\.|\s))\s*([0-9]+(?:\.[0-9]+)?)\s*%?/i,
+    /([0-9]{2,3})\s*%\s*(?:nrr|ndr|retention)\b/i
+  ];
+  for (const pat of nrrPatterns) {
+    const m = cleaned.match(pat);
+    if (m) {
+      extracted.retention = Number(parseFloat(m[1]).toFixed(1));
+      break;
+    }
+  }
+
+  // 7. Sector / Industry keywords:
+  const sectorKeywords = [
+    { key: 'Enterprise B2B SaaS & AI', match: /\b(enterprise saas|b2b saas|saas|software|cloud platform|b2b software)\b/i },
+    { key: 'FinTech & B2B Payments', match: /\b(fintech|payments|treasury|banking|financial tech|billing|payroll)\b/i },
+    { key: 'Digital Health & HealthTech', match: /\b(healthtech|healthcare|health saas|clinical|telehealth|medtech|ehr)\b/i },
+    { key: 'CyberSecurity & Zero-Trust', match: /\b(cyber|cybersecurity|security|zero-trust|infosec|soc2|compliance)\b/i },
+    { key: 'DevOps & Cloud Infrastructure', match: /\b(devops|infrastructure|observability|kubernetes|cloud infra|developer tools)\b/i },
+    { key: 'E-Commerce & Supply Chain', match: /\b(e-commerce|ecommerce|supply chain|logistics|retail tech|dtc)\b/i },
+    { key: 'AI / ML & Intelligent Systems', match: /\b(ai|artificial intelligence|machine learning|genai|llm|computer vision)\b/i }
+  ];
+  const sectorLabelMatch = cleaned.match(/(?:sector|industry|category|vertical|space)(?:\s*(?:is|:|\s))\s*([A-Za-z0-9][A-Za-z0-9\s&/\-]{2,40}?)(?:,|\.|\n|website|revenue|rev|growth|margin|ebitda|debt|\$|$)/i);
+  if (sectorLabelMatch && sectorLabelMatch[1]?.trim()) {
+    extracted.sector = sectorLabelMatch[1].trim();
+  } else {
+    for (const sk of sectorKeywords) {
+      if (sk.match.test(cleaned)) {
+        extracted.sector = sk.key;
+        break;
+      }
+    }
+  }
+
+  // 8. Company Name:
+  let nameMatch = cleaned.match(/(?:company name|company|target|name|asset)(?:\s*(?:is called|is|:|called|\s))\s*([A-Za-z0-9][A-Za-z0-9\s&.\-]{1,35}?)(?:,|\.|\n|website|sector|industry|revenue|rev|growth|margin|ebitda|debt|with|\$|$)/i);
+  if (nameMatch && nameMatch[1]?.trim() && !/^(the|a|an|new|target|company|asset)$/i.test(nameMatch[1].trim())) {
+    extracted.name = nameMatch[1].trim();
+  } else if (isDraft || currentCompany.isDraft || currentCompany.name?.startsWith('New Target')) {
+    const firstSegment = cleaned.split(/[,;\n]/)[0].trim();
+    if (firstSegment.length > 1 && firstSegment.length < 35 && !firstSegment.includes('$') && !firstSegment.includes('%') && !/^(hello|hi|hey|help|what|can you|how|why|is|yes|no)/i.test(firstSegment)) {
+      const stripped = firstSegment.replace(/^(it's called|it is called|it's|it is|add|target:?|company:?)\s+/i, '').trim();
+      if (stripped.length > 1 && !/^(revenue|growth|margin|debt|sector|industry|yes|no|ok)/i.test(stripped)) {
+        extracted.name = stripped;
+      }
+    }
+  }
+
+  return extracted;
+}
+
+// Conversational Intake Formulator (Returns crisp, institutional advisory response)
+export function generateConversationalIntakeReply({ entities, company, revenue, growth, margin, netDebt, comparableDeals }) {
+  const hasName = Boolean(company.name && !company.name.startsWith('New Target'));
+  const hasSector = Boolean(company.sector && company.sector !== 'Sector Pending' && company.sector !== 'Discovery Phase');
+  const hasRev = revenue > 0;
+  const hasGrowth = growth > 0;
+  const hasMargin = margin > 0;
+  const hasDebt = netDebt !== undefined;
+
+  const comps = (comparableDeals && comparableDeals.length > 0) ? comparableDeals : getDefaultComps(company.sector);
+  const list = comps.map(d => d.multiple).filter(Boolean).sort((a, b) => a - b);
+  const medianMult = list.length ? list[Math.floor(list.length / 2)] : 4.5;
+  const lowMult = list.length ? list[0] : 3.5;
+  const highMult = list.length ? list[list.length - 1] : 5.5;
+
+  const lowEV = (revenue * lowMult).toFixed(1);
+  const medEV = (revenue * medianMult).toFixed(1);
+  const highEV = (revenue * highMult).toFixed(1);
+  const equityVal = (Number(medEV) - netDebt).toFixed(1);
+
+  // If both Name and Revenue are ready:
+  if (hasName && hasRev) {
+    return `### ✅ Valuation Model Calibrated for **${company.name}**
+
+I have registered the target parameters and updated your **Living Deal Canvas** on the right:
+* **Target:** **${company.name}** ${company.website ? `(\`${company.website}\`)` : ''}
+* **Sector:** ${company.sector || 'Enterprise Software'}
+* **LTM Revenue:** $${revenue}M
+* **YoY Growth:** ${growth}%
+* **EBITDA Margin:** ${margin}%
+* **Net Debt:** $${netDebt}M
+
+---
+
+### 📊 Indicative Valuation Corridor (Benchmark: ${medianMult.toFixed(1)}x EV/Revenue)
+* **Enterprise Value Corridor:** **$${lowEV}M – $${highEV}M**
+* **Median Reference EV:** **$${medEV}M**
+* **Less: Net Debt Deduction:** **−$${netDebt}M**
+* **Indicative Equity Value (Net to Equityholders):** **$${equityVal}M**
+
+The precedent comps, waterfall bridge, and sensitivity sliders on the right canvas are now live and interactive.
+
+**Next Recommended Steps:**
+1. Click **Deep Research** in the top bar to synthesize an autonomous 8-section institutional brief.
+2. Ask me to audit **diligence red flags**, identify **strategic consolidators**, or **stress-test growth scenarios**!`;
+  }
+
+  // If Name is provided but Revenue is still missing:
+  if (hasName && !hasRev) {
+    return `### 👍 Target Registered: **${company.name}**
+* **Sector:** ${company.sector || 'Pending discovery'}
+${company.website ? `* **Website:** \`${company.website}\`\n` : ''}
+I've initialized the diligence workspace for **${company.name}** in the sidebar.
+
+To calculate the indicative valuation corridor and benchmark precedent M&A comps, what are the target's financial metrics?
+* **LTM Revenue / ARR** (e.g., *$25M*)
+* **YoY Revenue Growth %** (e.g., *35%*)
+* **EBITDA Margin %** (e.g., *18%*)
+* **Net Debt** (e.g., *$2M*, or *$0* if debt-free)
+
+*(Tip: You can reply: "Revenue $25M, 35% growth, 18% margin, $2M debt")*`;
+  }
+
+  // If Financials are provided but Name is still missing:
+  if (!hasName && hasRev) {
+    return `### 📈 Financial Metrics Recorded:
+* **LTM Revenue:** $${revenue}M
+* **YoY Growth:** ${growth}%
+* **EBITDA Margin:** ${margin}%
+* **Net Debt:** $${netDebt}M
+
+What is the **company name** and **sector / website** for this target so I can label the dossier and calibrate sector comps?`;
+  }
+
+  // Fallback initial greeting:
+  return `### 🎯 Diligence Target Intake
+Let's calibrate the valuation model for this session:
+* **Company Name:** ${hasName ? company.name : '*(Awaiting input)*'}
+* **Sector / Industry:** ${hasSector ? company.sector : '*(Awaiting input)*'}
+* **LTM Revenue:** ${hasRev ? `$${revenue}M` : '*(Awaiting input)*'}
+
+What is the target company's name and industry?`;
 }

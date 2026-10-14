@@ -736,6 +736,7 @@ export default function Home() {
           onOpenKnowledgeBaseModal={() => setIsKbModalOpen(true)}
           onOpenSkillsModal={() => setIsSkillsModalOpen(true)}
           onOpenCustomModal={() => setIsCustomModalOpen(true)}
+          onAddCompany={handleAddCompany}
           isDarkMode={isDarkMode}
           onToggleTheme={toggleTheme}
           onToast={setToast}
