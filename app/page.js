@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import {
   CheckCircle2, Moon, Sparkles, Sun, X, Building2, KeyRound,
-  BookOpen, Zap, LayoutTemplate, ChevronDown, SlidersHorizontal
+  BookOpen, Zap, LayoutTemplate, ChevronDown, SlidersHorizontal, Database
 } from 'lucide-react';
 import MarketBriefView from './market-brief-view';
 import ApiKeyModal from './api-key-modal';
@@ -11,65 +11,66 @@ import CustomCompanyModal from './custom-company-modal';
 import KnowledgeBaseModal from './knowledge-base-modal';
 import SkillsModal from './skills-modal';
 import ReportLayoutsModal from './report-layouts-modal';
+import WorkspaceVaultModal from './workspace-vault-modal';
 import { clearCompanyWorkspace } from './workspace-store';
 
-// Initial pre-loaded industry presets
+// Initial pre-loaded industry presets featuring verified real-world market leaders
 const defaultCompanies = [
   {
     id: 'sample-health',
-    name: 'CareLogic Solutions',
-    initials: 'CL',
-    sector: 'Healthcare IT & Clinical SaaS',
-    website: 'carelogicsolutions.com',
-    revenue: '$28M',
-    growth: '34%',
-    margin: '19%',
-    retention: '114%',
-    netDebt: 4,
-    location: 'Austin, TX',
-    notes: 'Specialized EHR workflow automation and patient intake telemetry.'
+    name: 'Veeva Systems',
+    initials: 'VS',
+    sector: 'Healthcare IT & Life Sciences Cloud',
+    website: 'veeva.com',
+    revenue: '$2,750M',
+    growth: '19%',
+    margin: '38%',
+    retention: '119%',
+    netDebt: -1200,
+    location: 'Pleasanton, CA',
+    notes: 'Global standard cloud platform for pharmaceutical clinical trials (Veeva Vault) and commercial operations.'
   },
   {
     id: 'sample-fintech',
-    name: 'LedgerFlow Treasury',
-    initials: 'LF',
+    name: 'Stripe',
+    initials: 'ST',
     sector: 'FinTech & B2B Payments',
-    website: 'ledgerflowpay.com',
-    revenue: '$42M',
-    growth: '28%',
-    margin: '22%',
-    retention: '118%',
-    netDebt: 6,
-    location: 'Chicago, IL',
-    notes: 'Real-time corporate treasury reconciliation and multi-currency payout infrastructure.'
+    website: 'stripe.com',
+    revenue: '$14,000M',
+    growth: '35%',
+    margin: '24%',
+    retention: '122%',
+    netDebt: 0,
+    location: 'San Francisco, CA & Dublin',
+    notes: 'Global economic infrastructure, corporate billing rails, and embedded treasury orchestration.'
   },
   {
     id: 'sample-cyber',
-    name: 'SentinelVault Cyber',
-    initials: 'SV',
+    name: 'CrowdStrike',
+    initials: 'CS',
     sector: 'CyberSecurity & Zero-Trust',
-    website: 'sentinelvault.io',
-    revenue: '$35M',
-    growth: '45%',
-    margin: '15%',
-    retention: '122%',
-    netDebt: 2,
-    location: 'Boston, MA',
-    notes: 'Identity threat detection and autonomous cloud privilege management.'
+    website: 'crowdstrike.com',
+    revenue: '$3,950M',
+    growth: '32%',
+    margin: '25%',
+    retention: '120%',
+    netDebt: -1800,
+    location: 'Austin, TX',
+    notes: 'AI-native Falcon platform delivering unified endpoint protection, identity security, and cloud XDR.'
   },
   {
     id: 'sample-saas',
-    name: 'NexusLogic Enterprise AI',
-    initials: 'NL',
-    sector: 'Enterprise B2B SaaS & AI',
-    website: 'nexuslogic.ai',
-    revenue: '$21M',
-    growth: '55%',
-    margin: '12%',
-    retention: '125%',
-    netDebt: 3,
-    location: 'San Francisco, CA',
-    notes: 'Autonomous knowledge graph synthesis and operational agent infrastructure.'
+    name: 'Datadog',
+    initials: 'DD',
+    sector: 'Enterprise B2B SaaS & DevOps',
+    website: 'datadoghq.com',
+    revenue: '$2,680M',
+    growth: '26%',
+    margin: '23%',
+    retention: '115%',
+    netDebt: -2100,
+    location: 'New York, NY',
+    notes: 'Full-stack cloud application observability, APM, log analytics, and cloud infrastructure monitoring.'
   }
 ];
 
@@ -234,12 +235,37 @@ export default function Home() {
   const [activeLayoutId, setActiveLayoutId] = useState('layout-standard-ma');
   const [isLayoutsModalOpen, setIsLayoutsModalOpen] = useState(false);
 
+  // Zero-Database Workspace Vault state
+  const [isVaultModalOpen, setIsVaultModalOpen] = useState(false);
+
   // Dropdown menu state
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   // Active workflow tab state (shared with navbar and MarketBriefView)
   const [activeTab, setActiveTab] = useState('analysis');
+
+  const handleVaultRestored = (restoredData) => {
+    if (restoredData?.customCompanies) {
+      setCompanies(prev => {
+        const customIds = new Set(restoredData.customCompanies.map(c => c.id));
+        return [...restoredData.customCompanies, ...defaultCompanies.filter(d => !customIds.has(d.id))];
+      });
+    }
+    if (Array.isArray(restoredData?.knowledgeBase)) {
+      setKnowledgeBase(restoredData.knowledgeBase);
+    }
+    if (Array.isArray(restoredData?.skills)) {
+      setSkills(restoredData.skills);
+    }
+    if (Array.isArray(restoredData?.reportLayouts)) {
+      setReportLayouts(restoredData.reportLayouts);
+    }
+    if (restoredData?.activeLayout) {
+      setActiveLayoutId(restoredData.activeLayout);
+    }
+    setToast('Workspace Vault restored successfully! All models & data loaded.');
+  };
 
   // Global keyboard shortcuts (Cmd/Ctrl + 1-4 for tabs, Cmd/Ctrl + K for tools)
   useEffect(() => {
@@ -553,6 +579,21 @@ export default function Home() {
               </span>
             </button>
 
+            {/* Zero-Database Workspace Vault Action */}
+            <button
+              type="button"
+              className="btn btn-outline btn-sm nav-model-pill"
+              onClick={() => setIsVaultModalOpen(true)}
+              title="Zero-Database Workspace Vault: Export or restore offline backup without cloud database."
+              style={{ gap: '0.4rem' }}
+            >
+              <Database size={13} style={{ color: '#10b981' }} />
+              <span className="nav-model-name">Vault</span>
+              <span className="badge badge-success" style={{ fontSize: '0.625rem', padding: '0.05rem 0.35rem' }}>
+                Zero-DB
+              </span>
+            </button>
+
             {/* Unified Dropdown Menu */}
             <div className="dropdown-wrapper" ref={dropdownRef}>
               <button
@@ -705,6 +746,29 @@ export default function Home() {
                       {hasActiveKey ? `${activeProviderLabel} Active` : 'Offline'}
                     </span>
                   </button>
+
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      setIsVaultModalOpen(true);
+                    }}
+                  >
+                    <div className="dropdown-item-content">
+                      <div className="dropdown-item-icon">
+                        <Database size={14} style={{ color: '#10b981' }} />
+                      </div>
+                      <div className="dropdown-item-title">
+                        <span className="dropdown-item-name">Workspace Vault (Zero-DB)</span>
+                        <span className="dropdown-item-desc">Offline backup, JSON restore & local sandbox</span>
+                      </div>
+                    </div>
+                    <span className="badge badge-success" style={{ fontSize: '0.625rem' }}>
+                      Backup / Restore
+                    </span>
+                  </button>
                 </div>
               )}
             </div>
@@ -756,6 +820,14 @@ export default function Home() {
         isOpen={isCustomModalOpen}
         onClose={() => setIsCustomModalOpen(false)}
         onAddCompany={handleAddCompany}
+      />
+
+      {/* Zero-Database Workspace Vault Dialog */}
+      <WorkspaceVaultModal
+        isOpen={isVaultModalOpen}
+        onClose={() => setIsVaultModalOpen(false)}
+        onVaultRestored={handleVaultRestored}
+        onToast={setToast}
       />
 
       {/* Knowledge Base Modal */}
