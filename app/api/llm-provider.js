@@ -6,15 +6,16 @@ export const PROVIDERS = {
     name: 'Google Gemini',
     tag: 'Search Grounded',
     badgeClass: 'badge-secondary',
-    defaultModel: 'gemini-3.8-flash',
+    defaultModel: 'gemini-2.5-flash',
     models: [
-      { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Latest Flagship)' },
-      { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash Preview' },
-      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' }
+      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Fast & Grounded)' },
+      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Next-Gen Production)' },
+      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (High Efficiency)' },
+      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Complex Reasoning)' },
+      { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite' }
     ],
     envVar: 'GEMINI_API_KEY',
-    keyPlaceholder: 'AQ... or AIzaSy...',
+    keyPlaceholder: 'AIzaSy...',
     keyDocsUrl: 'https://aistudio.google.com/apikey',
     docsLabel: 'Google AI Studio'
   },
@@ -28,7 +29,7 @@ export const PROVIDERS = {
       { id: 'gpt-4o', name: 'GPT-4o (Omni Flagship)' },
       { id: 'gpt-4o-mini', name: 'GPT-4o mini (High Speed)' },
       { id: 'o3-mini', name: 'o3-mini (STEM & Financial Reasoning)' },
-      { id: 'gpt-4.5-preview', name: 'GPT-4.5 Preview' }
+      { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' }
     ],
     envVar: 'OPENAI_API_KEY',
     keyPlaceholder: 'sk-proj-... or sk-...',
@@ -86,6 +87,31 @@ export const PROVIDERS = {
 };
 
 /**
+ * Checks if an error is a recoverable model-level failure (429 rate limit, quota, 404, or 503)
+ */
+export function isModelLimitOrUnavailableError(msg = '') {
+  const m = String(msg).toLowerCase();
+  return (
+    m.includes('429') ||
+    m.includes('resource_exhausted') ||
+    m.includes('quota') ||
+    m.includes('rate limit') ||
+    m.includes('too many requests') ||
+    m.includes('exhausted') ||
+    m.includes('404') ||
+    m.includes('not_found') ||
+    m.includes('not found') ||
+    m.includes('is no longer available') ||
+    m.includes('unsupported') ||
+    m.includes('503') ||
+    m.includes('overloaded') ||
+    m.includes('service unavailable') ||
+    m.includes('500') ||
+    m.includes('internal error')
+  );
+}
+
+/**
  * Resolves the API key for a given provider from user input or environment variables.
  */
 export function resolveApiKey(providerId, userKey) {
@@ -110,7 +136,7 @@ export function resolveApiKey(providerId, userKey) {
 }
 
 /**
- * Verifies connectivity with any supported LLM provider.
+ * Verifies connectivity with any supported LLM provider with automatic model fallback.
  */
 export async function verifyProviderKey({ providerId, apiKey, modelId }) {
   const provider = PROVIDERS[providerId] || PROVIDERS.gemini;
@@ -122,13 +148,16 @@ export async function verifyProviderKey({ providerId, apiKey, modelId }) {
   }
 
   if (provider.id === 'gemini') {
-    let cleanModel = targetModel;
-    if (!cleanModel || cleanModel.includes('2.5')) {
-      cleanModel = 'gemini-3.8-flash';
-    }
     const ai = new GoogleGenAI({ apiKey: key });
-    const candidates = [cleanModel, 'gemini-3.8-flash', 'gemini-3-flash-preview', 'gemini-2.0-flash', 'gemini-1.5-pro'];
-    const uniqueCandidates = [...new Set(candidates.filter(Boolean))];
+    const candidates = [
+      targetModel,
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro',
+      'gemini-2.0-flash-lite'
+    ].filter(Boolean);
+    const uniqueCandidates = [...new Set(candidates)];
 
     let lastError = null;
     for (const cand of uniqueCandidates) {
@@ -146,7 +175,8 @@ export async function verifyProviderKey({ providerId, apiKey, modelId }) {
       } catch (candErr) {
         lastError = candErr;
         const msg = candErr?.message || String(candErr);
-        if (msg.includes('404') || msg.includes('NOT_FOUND') || msg.includes('not found') || msg.includes('is no longer available') || msg.includes('unsupported')) {
+        if (isModelLimitOrUnavailableError(msg)) {
+          console.warn(`[Key Verify Failover] Model ${cand} failed (${msg}), trying next...`);
           continue;
         }
         throw candErr;
@@ -156,57 +186,93 @@ export async function verifyProviderKey({ providerId, apiKey, modelId }) {
   }
 
   if (provider.id === 'openai') {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`
-      },
-      body: JSON.stringify({
-        model: targetModel,
-        messages: [{ role: 'user', content: 'Respond with "PONG".' }],
-        max_tokens: 10
-      })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `OpenAI returned status ${res.status}`);
+    const candidates = [targetModel, 'gpt-4o', 'gpt-4o-mini', 'o3-mini'].filter(Boolean);
+    const uniqueCandidates = [...new Set(candidates)];
+    let lastError = null;
+
+    for (const cand of uniqueCandidates) {
+      try {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${key}`
+          },
+          body: JSON.stringify({
+            model: cand,
+            messages: [{ role: 'user', content: 'Respond with "PONG".' }],
+            max_tokens: 10
+          })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const errMsg = err.error?.message || `OpenAI returned status ${res.status}`;
+          if (isModelLimitOrUnavailableError(errMsg)) {
+            lastError = new Error(errMsg);
+            continue;
+          }
+          throw new Error(errMsg);
+        }
+        const data = await res.json();
+        return {
+          valid: true,
+          provider: provider.name,
+          model: cand,
+          preview: data.choices?.[0]?.message?.content?.trim() || 'OK'
+        };
+      } catch (err) {
+        lastError = err;
+        if (isModelLimitOrUnavailableError(err.message)) continue;
+        throw err;
+      }
     }
-    const data = await res.json();
-    return {
-      valid: true,
-      provider: provider.name,
-      model: targetModel,
-      preview: data.choices?.[0]?.message?.content?.trim() || 'OK'
-    };
+    throw lastError || new Error(`Failed to verify OpenAI API key.`);
   }
 
   if (provider.id === 'claude') {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: targetModel,
-        max_tokens: 15,
-        messages: [{ role: 'user', content: 'Respond with "PONG".' }]
-      })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `Anthropic returned status ${res.status}`);
+    const candidates = [targetModel, 'claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'].filter(Boolean);
+    const uniqueCandidates = [...new Set(candidates)];
+    let lastError = null;
+
+    for (const cand of uniqueCandidates) {
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01'
+          },
+          body: JSON.stringify({
+            model: cand,
+            max_tokens: 15,
+            messages: [{ role: 'user', content: 'Respond with "PONG".' }]
+          })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const errMsg = err.error?.message || `Anthropic returned status ${res.status}`;
+          if (isModelLimitOrUnavailableError(errMsg)) {
+            lastError = new Error(errMsg);
+            continue;
+          }
+          throw new Error(errMsg);
+        }
+        const data = await res.json();
+        const text = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || 'OK';
+        return {
+          valid: true,
+          provider: provider.name,
+          model: cand,
+          preview: text.trim()
+        };
+      } catch (err) {
+        lastError = err;
+        if (isModelLimitOrUnavailableError(err.message)) continue;
+        throw err;
+      }
     }
-    const data = await res.json();
-    const text = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || 'OK';
-    return {
-      valid: true,
-      provider: provider.name,
-      model: targetModel,
-      preview: text.trim()
-    };
+    throw lastError || new Error(`Failed to verify Anthropic API key.`);
   }
 
   if (provider.id === 'grok') {
@@ -265,7 +331,9 @@ export async function verifyProviderKey({ providerId, apiKey, modelId }) {
 }
 
 /**
- * Unified completion runner for all supported providers.
+ * Unified completion runner for all supported providers with intelligent model failover.
+ * If a model reaches its rate limit (429), quota exceeded, or is unavailable,
+ * it automatically switches to the next available candidate model in the chain.
  */
 export async function runUnifiedCompletion({
   providerId = 'gemini',
@@ -287,22 +355,26 @@ export async function runUnifiedCompletion({
   let textResult = '';
   let groundingSources = [];
 
-  // 1. Google Gemini
+  // 1. Google Gemini (Search Grounded with Auto-Failover Chain)
   if (provider.id === 'gemini') {
-    let cleanModel = targetModel;
-    if (!cleanModel || cleanModel.includes('2.5')) {
-      cleanModel = 'gemini-3.8-flash';
-    }
     const ai = new GoogleGenAI({ apiKey: key });
     let response = null;
-    let successfulModel = cleanModel;
+    let successfulModel = targetModel;
 
-    const candidateModels = [cleanModel, 'gemini-3.8-flash', 'gemini-3-flash-preview', 'gemini-2.0-flash', 'gemini-1.5-pro'];
-    const uniqueCandidates = [...new Set(candidateModels.filter(Boolean))];
+    const candidateModels = [
+      targetModel,
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro',
+      'gemini-2.0-flash-lite'
+    ].filter(Boolean);
+    const uniqueCandidates = [...new Set(candidateModels)];
 
     let lastError = null;
 
-    for (const cand of uniqueCandidates) {
+    for (let i = 0; i < uniqueCandidates.length; i++) {
+      const cand = uniqueCandidates[i];
       try {
         // Attempt first with Search Grounding
         try {
@@ -318,11 +390,11 @@ export async function runUnifiedCompletion({
           break;
         } catch (searchToolErr) {
           const searchMsg = searchToolErr?.message || String(searchToolErr);
-          // If model itself is 404/deprecated, rethrow to outer catch to test next candidate
-          if (searchMsg.includes('404') || searchMsg.includes('NOT_FOUND') || searchMsg.includes('not found') || searchMsg.includes('is no longer available')) {
+          // If model itself is limited or unavailable, rethrow to outer catch to test next candidate
+          if (isModelLimitOrUnavailableError(searchMsg)) {
             throw searchToolErr;
           }
-          // Otherwise try without tools (e.g. tool quota / tool permission constraint)
+          // Otherwise try without search tool (e.g. tool quota or permission constraint)
           response = await ai.models.generateContent({
             model: cand,
             contents: `${systemPrompt ? `${systemPrompt}\n\n` : ''}${userPrompt}`,
@@ -334,8 +406,8 @@ export async function runUnifiedCompletion({
       } catch (candErr) {
         lastError = candErr;
         const msg = candErr?.message || String(candErr);
-        if (msg.includes('404') || msg.includes('NOT_FOUND') || msg.includes('not found') || msg.includes('is no longer available')) {
-          console.warn(`[Gemini Fallback] Model ${cand} unavailable (404/deprecated), advancing to next candidate...`);
+        if (isModelLimitOrUnavailableError(msg) && i < uniqueCandidates.length - 1) {
+          console.warn(`[Gemini Auto-Switch] Model "${cand}" hit limit or unavailable (${msg}). Automatically switching to next candidate: "${uniqueCandidates[i + 1]}"...`);
           continue;
         }
         throw candErr;
@@ -361,7 +433,7 @@ export async function runUnifiedCompletion({
     };
   }
 
-  // 2. OpenAI
+  // 2. OpenAI (with Auto-Failover Chain)
   if (provider.id === 'openai') {
     const chatMessages = [];
     if (systemPrompt) chatMessages.push({ role: 'system', content: systemPrompt });
@@ -371,35 +443,66 @@ export async function runUnifiedCompletion({
       chatMessages.push({ role: 'user', content: userPrompt });
     }
 
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`
-      },
-      body: JSON.stringify({
-        model: targetModel,
-        messages: chatMessages,
-        temperature
-      })
-    });
+    const candidateModels = [
+      targetModel,
+      'gpt-4o',
+      'gpt-4o-mini',
+      'o3-mini',
+      'gpt-4-turbo'
+    ].filter(Boolean);
+    const uniqueCandidates = [...new Set(candidateModels)];
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `OpenAI returned status ${res.status}`);
+    let successfulModel = targetModel;
+    let lastError = null;
+
+    for (let i = 0; i < uniqueCandidates.length; i++) {
+      const cand = uniqueCandidates[i];
+      try {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${key}`
+          },
+          body: JSON.stringify({
+            model: cand,
+            messages: chatMessages,
+            temperature
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const errMsg = err.error?.message || `OpenAI returned status ${res.status}`;
+          if (isModelLimitOrUnavailableError(errMsg) && i < uniqueCandidates.length - 1) {
+            console.warn(`[OpenAI Auto-Switch] Model "${cand}" limit reached (${errMsg}). Automatically switching to "${uniqueCandidates[i + 1]}"...`);
+            continue;
+          }
+          throw new Error(errMsg);
+        }
+
+        const data = await res.json();
+        textResult = data.choices?.[0]?.message?.content || '';
+        successfulModel = cand;
+        break;
+      } catch (err) {
+        lastError = err;
+        if (isModelLimitOrUnavailableError(err.message) && i < uniqueCandidates.length - 1) {
+          continue;
+        }
+        throw err;
+      }
     }
-    const data = await res.json();
-    textResult = data.choices?.[0]?.message?.content || '';
 
     return {
       text: textResult,
       groundingSources: [],
       provider: provider.name,
-      model: targetModel
+      model: successfulModel
     };
   }
 
-  // 3. Anthropic Claude
+  // 3. Anthropic Claude (with Auto-Failover Chain)
   if (provider.id === 'claude') {
     const claudeMessages = [];
     if (messages && messages.length > 0) {
@@ -411,40 +514,70 @@ export async function runUnifiedCompletion({
       claudeMessages.push({ role: 'user', content: userPrompt });
     }
 
-    const payload = {
-      model: targetModel,
-      max_tokens: 4096,
-      messages: claudeMessages,
-      temperature
-    };
-    if (systemPrompt) payload.system = systemPrompt;
+    const candidateModels = [
+      targetModel,
+      'claude-3-7-sonnet-20250219',
+      'claude-3-5-sonnet-20241022',
+      'claude-3-5-haiku-20241022'
+    ].filter(Boolean);
+    const uniqueCandidates = [...new Set(candidateModels)];
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify(payload)
-    });
+    let successfulModel = targetModel;
+    let lastError = null;
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `Anthropic returned status ${res.status}`);
+    for (let i = 0; i < uniqueCandidates.length; i++) {
+      const cand = uniqueCandidates[i];
+      try {
+        const payload = {
+          model: cand,
+          max_tokens: 4096,
+          messages: claudeMessages,
+          temperature
+        };
+        if (systemPrompt) payload.system = systemPrompt;
+
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const errMsg = err.error?.message || `Anthropic returned status ${res.status}`;
+          if (isModelLimitOrUnavailableError(errMsg) && i < uniqueCandidates.length - 1) {
+            console.warn(`[Claude Auto-Switch] Model "${cand}" limit reached (${errMsg}). Automatically switching to "${uniqueCandidates[i + 1]}"...`);
+            continue;
+          }
+          throw new Error(errMsg);
+        }
+
+        const data = await res.json();
+        textResult = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
+        successfulModel = cand;
+        break;
+      } catch (err) {
+        lastError = err;
+        if (isModelLimitOrUnavailableError(err.message) && i < uniqueCandidates.length - 1) {
+          continue;
+        }
+        throw err;
+      }
     }
-    const data = await res.json();
-    textResult = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
 
     return {
       text: textResult,
       groundingSources: [],
       provider: provider.name,
-      model: targetModel
+      model: successfulModel
     };
   }
 
-  // 4. xAI Grok
+  // 4. xAI Grok (with Auto-Failover Chain)
   if (provider.id === 'grok') {
     const chatMessages = [];
     if (systemPrompt) chatMessages.push({ role: 'system', content: systemPrompt });
@@ -454,35 +587,65 @@ export async function runUnifiedCompletion({
       chatMessages.push({ role: 'user', content: userPrompt });
     }
 
-    const res = await fetch('https://api.x.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`
-      },
-      body: JSON.stringify({
-        model: targetModel,
-        messages: chatMessages,
-        temperature
-      })
-    });
+    const candidateModels = [
+      targetModel,
+      'grok-2-latest',
+      'grok-beta',
+      'grok-2-vision-1212'
+    ].filter(Boolean);
+    const uniqueCandidates = [...new Set(candidateModels)];
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `xAI Grok returned status ${res.status}`);
+    let successfulModel = targetModel;
+    let lastError = null;
+
+    for (let i = 0; i < uniqueCandidates.length; i++) {
+      const cand = uniqueCandidates[i];
+      try {
+        const res = await fetch('https://api.x.ai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${key}`
+          },
+          body: JSON.stringify({
+            model: cand,
+            messages: chatMessages,
+            temperature
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const errMsg = err.error?.message || `xAI Grok returned status ${res.status}`;
+          if (isModelLimitOrUnavailableError(errMsg) && i < uniqueCandidates.length - 1) {
+            console.warn(`[Grok Auto-Switch] Model "${cand}" limit reached (${errMsg}). Automatically switching to "${uniqueCandidates[i + 1]}"...`);
+            continue;
+          }
+          throw new Error(errMsg);
+        }
+
+        const data = await res.json();
+        textResult = data.choices?.[0]?.message?.content || '';
+        successfulModel = cand;
+        break;
+      } catch (err) {
+        lastError = err;
+        if (isModelLimitOrUnavailableError(err.message) && i < uniqueCandidates.length - 1) {
+          continue;
+        }
+        throw err;
+      }
     }
-    const data = await res.json();
-    textResult = data.choices?.[0]?.message?.content || '';
 
     return {
       text: textResult,
       groundingSources: [],
       provider: provider.name,
-      model: targetModel
+      model: successfulModel
     };
   }
 
-  // 5. Perplexity
+  // 5. Perplexity (with Auto-Failover Chain)
   if (provider.id === 'perplexity') {
     const chatMessages = [];
     if (systemPrompt) chatMessages.push({ role: 'system', content: systemPrompt });
@@ -492,45 +655,74 @@ export async function runUnifiedCompletion({
       chatMessages.push({ role: 'user', content: userPrompt });
     }
 
-    const res = await fetch('https://api.perplexity.ai/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`
-      },
-      body: JSON.stringify({
-        model: targetModel,
-        messages: chatMessages,
-        temperature
-      })
-    });
+    const candidateModels = [
+      targetModel,
+      'sonar-pro',
+      'sonar',
+      'sonar-reasoning-pro'
+    ].filter(Boolean);
+    const uniqueCandidates = [...new Set(candidateModels)];
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `Perplexity returned status ${res.status}`);
-    }
-    const data = await res.json();
-    textResult = data.choices?.[0]?.message?.content || '';
+    let successfulModel = targetModel;
+    let lastError = null;
 
-    // Perplexity automatically provides online citation URLs!
-    if (Array.isArray(data.citations)) {
-      groundingSources = data.citations.map((url, idx) => {
-        let domain = 'Perplexity Web Citation';
-        try {
-          domain = new URL(url).hostname.replace('www.', '');
-        } catch (_) {}
-        return {
-          title: `[${idx + 1}] ${domain}`,
-          uri: url
-        };
-      });
+    for (let i = 0; i < uniqueCandidates.length; i++) {
+      const cand = uniqueCandidates[i];
+      try {
+        const res = await fetch('https://api.perplexity.ai/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${key}`
+          },
+          body: JSON.stringify({
+            model: cand,
+            messages: chatMessages,
+            temperature
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const errMsg = err.error?.message || `Perplexity returned status ${res.status}`;
+          if (isModelLimitOrUnavailableError(errMsg) && i < uniqueCandidates.length - 1) {
+            console.warn(`[Perplexity Auto-Switch] Model "${cand}" limit reached (${errMsg}). Automatically switching to "${uniqueCandidates[i + 1]}"...`);
+            continue;
+          }
+          throw new Error(errMsg);
+        }
+
+        const data = await res.json();
+        textResult = data.choices?.[0]?.message?.content || '';
+        successfulModel = cand;
+
+        if (Array.isArray(data.citations)) {
+          groundingSources = data.citations.map((url, idx) => {
+            let domain = 'Perplexity Web Citation';
+            try {
+              domain = new URL(url).hostname.replace('www.', '');
+            } catch (_) {}
+            return {
+              title: `[${idx + 1}] ${domain}`,
+              uri: url
+            };
+          });
+        }
+        break;
+      } catch (err) {
+        lastError = err;
+        if (isModelLimitOrUnavailableError(err.message) && i < uniqueCandidates.length - 1) {
+          continue;
+        }
+        throw err;
+      }
     }
 
     return {
       text: textResult,
       groundingSources,
       provider: provider.name,
-      model: targetModel
+      model: successfulModel
     };
   }
 

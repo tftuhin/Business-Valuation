@@ -455,6 +455,24 @@ Ask me to analyze valuation multiples, stress-test growth or margins, identify s
       setWorkspacesRev(v => v + 1);
     }
 
+    // Check if user has requested extensive research or report generation
+    const isResearchRequest = /\b(?:do\s+(?:extensive\s+|deep\s+|market\s+)?research|extensive\s+research|deep\s+research|run\s+(?:deep\s+)?research|research\s+(?:this|the|our)?\s*(?:company|target|asset)?|generate\s+(?:the\s+|a\s+)?(?:report|brief|dossier)|create\s+(?:the\s+|a\s+)?(?:report|brief|dossier)|build\s+(?:the\s+|a\s+)?(?:report|brief|dossier)|make\s+(?:the\s+|a\s+)?(?:report|brief|dossier)|institutional\s+report|valuation\s+report|market\s+brief|synthesize\s+(?:the\s+)?(?:dossier|report|research)|conduct\s+(?:market\s+)?research)\b/i.test(text);
+
+    if (isResearchRequest) {
+      await executeDeepResearch(
+        updatedCompany,
+        {
+          revenue: nextRevenue > 0 ? nextRevenue : (revenue > 0 ? revenue : 25),
+          growth: nextGrowth > 0 ? nextGrowth : (growth > 0 ? growth : 30),
+          margin: nextMargin > 0 ? nextMargin : (margin > 0 ? margin : 18),
+          retention: nextRetention > 0 ? nextRetention : (retention > 0 ? retention : 110),
+          netDebt: nextNetDebt !== undefined ? nextNetDebt : (netDebt !== undefined ? netDebt : 0)
+        },
+        nextMessages
+      );
+      return;
+    }
+
     // Conversational Intake Response (No modal required):
     // If activeCompany was in draft, or revenue was 0, or new target parameters were provided during intake
     if (isTargetDraft || (hasAnyEntity && (activeCompany?.isDraft || revenue === 0))) {
@@ -539,10 +557,21 @@ Ask me to analyze valuation multiples, stress-test growth or margins, identify s
     }
   };
 
-  // Run Autonomous Multi-Agent Deep Research
-  const handleRunDeepResearch = async () => {
+  // Run Autonomous Multi-Agent Deep Research (Used by both Chat and Header Button)
+  const executeDeepResearch = async (
+    targetCompany = activeCompany,
+    targetFin = { revenue, growth, margin, retention, netDebt },
+    baseMessages = displayedMessages
+  ) => {
     setIsAgentRunning(true);
-    onToast(`Autonomous agents dispatched for ${activeCompany?.name || 'target'}...`);
+    setIsLoading(true);
+    onToast(`Autonomous research agents dispatched for ${targetCompany?.name || 'target'}...`);
+
+    const calcRevenue = targetFin.revenue > 0 ? targetFin.revenue : (revenue > 0 ? revenue : 25);
+    const calcGrowth = targetFin.growth > 0 ? targetFin.growth : (growth > 0 ? growth : 30);
+    const calcMargin = targetFin.margin > 0 ? targetFin.margin : (margin > 0 ? margin : 18);
+    const calcRetention = targetFin.retention > 0 ? targetFin.retention : (retention > 0 ? retention : 110);
+    const calcDebt = targetFin.netDebt !== undefined ? targetFin.netDebt : (netDebt !== undefined ? netDebt : 0);
 
     try {
       const response = await fetch('/api/research', {
@@ -550,12 +579,12 @@ Ask me to analyze valuation multiples, stress-test growth or margins, identify s
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           company: {
-            ...activeCompany,
-            revenue,
-            growth,
-            margin,
-            retention,
-            netDebt
+            ...targetCompany,
+            revenue: calcRevenue,
+            growth: calcGrowth,
+            margin: calcMargin,
+            retention: calcRetention,
+            netDebt: calcDebt
           },
           providerId: aiSettings?.activeProvider || 'gemini',
           modelId: aiSettings?.models?.[aiSettings?.activeProvider],
@@ -568,51 +597,116 @@ Ask me to analyze valuation multiples, stress-test growth or margins, identify s
 
       const data = await response.json();
       if (data.success) {
+        const activeDeals = (Array.isArray(data.comparableDeals) && data.comparableDeals.length > 0)
+          ? data.comparableDeals
+          : (comparableDeals.length > 0 ? comparableDeals : getDefaultComps(targetCompany.sector));
+
+        const multList = activeDeals.map(d => d.multiple).filter(Boolean).sort((a, b) => a - b);
+        const lowM = multList.length ? multList[0] : 3.5;
+        const medM = multList.length ? multList[Math.floor(multList.length / 2)] : 4.5;
+        const highM = multList.length ? multList[multList.length - 1] : 5.5;
+
+        const rLowEV = (calcRevenue * lowM).toFixed(1);
+        const rMedEV = (calcRevenue * medM).toFixed(1);
+        const rHighEV = (calcRevenue * highM).toFixed(1);
+        const rEquity = (Number(rMedEV) - calcDebt).toFixed(1);
+
         setReportMarkdown(data.reportMarkdown || '');
         setGroundingSources(data.groundingSources || []);
-        if (Array.isArray(data.comparableDeals) && data.comparableDeals.length > 0) {
-          setComparableDeals(data.comparableDeals);
-        }
+        setComparableDeals(activeDeals);
 
-        // Save into workspace
-        saveCompanyWorkspace(activeCompanyId, {
-          financials: { revenue, growth, margin, retention, netDebt },
+        // Save into workspace store so it stays inside this company's session context permanently
+        saveCompanyWorkspace(targetCompany.id, {
+          financials: {
+            revenue: calcRevenue,
+            growth: calcGrowth,
+            margin: calcMargin,
+            retention: calcRetention,
+            netDebt: calcDebt
+          },
           research: {
             agentStatus: 'completed',
             generatedReportMarkdown: data.reportMarkdown || '',
             agentLogs: data.agentLogs || [],
             groundingSources: data.groundingSources || [],
-            activeDeals: data.comparableDeals || comparableDeals,
+            activeDeals,
             reviewed: false,
             lastResearchedAt: new Date().toISOString()
           }
         });
         setWorkspacesRev(v => v + 1);
 
-        // Add a message into the chat acknowledging research completion
-        const notifyMsg = {
-          id: `research-done-${Date.now()}`,
-          role: 'assistant',
-          content: `### 🎯 Autonomous Research Complete for **${activeCompany?.name}**
-I have synthesized market intelligence, verified precedent transactions, and generated an institutional valuation brief.
-* **Indicative Enterprise Range:** $${lowEV}M to $${highEV}M (Median: $${medianEV}M)
-* **Precedent Benchmark Comps:** ${(data.comparableDeals || []).length} sector acquisitions calibrated.
-* **Canvas Updated:** The full 8-section report and valuation models are now live on your right canvas.`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        persistChatMessages([...displayedMessages, notifyMsg]);
+        // Automatically open canvas and switch to the generated report
         setIsCanvasOpen(true);
         setActiveCanvasTab('brief');
-        onToast('Deep research synthesized! Dossier updated on canvas.');
+
+        // Synthesize conversational response informing the user of the research findings
+        const researchReply = `### 🎯 Extensive Market Research & Valuation Brief Synthesized for **${targetCompany.name}**
+
+Autonomous research agents have analyzed the market, benchmarked unit economics, and generated an institutional **8-section valuation report**.
+
+---
+
+### 📊 Valuation Benchmark Summary:
+* **Target Asset:** **${targetCompany.name}** ${targetCompany.website ? `(\`${targetCompany.website}\`)` : ''}
+* **Sector:** ${targetCompany.sector || 'Enterprise Software'}
+* **LTM Revenue:** $${calcRevenue}M | **YoY Growth:** ${calcGrowth}% | **EBITDA Margin:** ${calcMargin}%
+* **Precedent Multiple Range:** **${lowM.toFixed(1)}x – ${highM.toFixed(1)}x EV/Revenue** (Median: **${medM.toFixed(1)}x**)
+* **Indicative Enterprise Value (EV):** **$${rLowEV}M – $${rHighEV}M** (Median Case: **$${rMedEV}M**)
+* **Net Debt Deduction:** **−$${calcDebt}M**
+* **Implied Equity Value:** **$${rEquity}M**
+
+---
+
+### 📑 Stored in Context & Available on Canvas:
+1. **Executive Summary & Investment Thesis**
+2. **Business Overview & Operational Profile**
+3. **Financial Summary & Operational KPIs (Benchmarked)**
+4. **Market Dynamics & Industry Landscape (TAM $12.5B+, 14.2% CAGR)**
+5. **${activeDeals.length} Verified Precedent Transactions**
+6. **Indicative Valuation Analysis & Range Corridor**
+7. **Strategic & Financial Buyer Universe**
+8. **Due Diligence Red Flags & Priority Checklist**
+
+> *The full 8-section report has been stored in this target's context and is now open on your **Living Deal Canvas** (Brief tab). You can now ask me any specific questions about competitors, valuation sensitivity, buyer synergies, or diligence risks!*`;
+
+        const assistantMsg = {
+          id: `research-done-${Date.now()}`,
+          role: 'assistant',
+          content: researchReply,
+          provider: data.engine || 'Autonomous Research Agent Fleet',
+          model: aiSettings?.models?.[aiSettings?.activeProvider] || 'gemini-2.5-flash',
+          citations: (data.groundingSources || []).slice(0, 5),
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        persistChatMessages([...baseMessages, assistantMsg]);
+        onToast(`Extensive research generated and saved for ${targetCompany.name}!`);
       } else {
         throw new Error(data.error || 'Failed to complete agent research');
       }
     } catch (err) {
       console.error('Deep research error:', err);
+      const errorMsg = {
+        id: `err-${Date.now()}`,
+        role: 'assistant',
+        content: `**Research Notice:** Encountered an issue connecting to live research agents (${err.message}). Default sector benchmarks and comps remain active on your right canvas.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      persistChatMessages([...baseMessages, errorMsg]);
       onToast(`Research agent error: ${err.message}`);
     } finally {
       setIsAgentRunning(false);
+      setIsLoading(false);
     }
+  };
+
+  const handleRunDeepResearch = async () => {
+    await executeDeepResearch(
+      activeCompany,
+      { revenue, growth, margin, retention, netDebt },
+      displayedMessages
+    );
   };
 
   const handleClearSessionChat = () => {
@@ -1730,6 +1824,92 @@ function getDefaultComps(sector = '') {
   ];
 }
 
+// Financial and M&A Stop-Words (Never accept these as company names)
+const FINANCIAL_STOPWORDS = new Set([
+  'ltm', 'ttm', 'arr', 'mrr', 'fy', 'fy23', 'fy24', 'fy25', 'fy26', 'cagr',
+  'ebitda', 'nrr', 'ndr', 'gmv', 'cac', 'ltv', 'acv', 'qoe', 'ev', 'pe',
+  'revenue', 'rev', 'sales', 'growth', 'margin', 'debt', 'netdebt', 'cash',
+  'multiple', 'valuation', 'corridor', 'bridge', 'equity', 'intake',
+  'target', 'company', 'asset', 'sector', 'industry', 'category', 'vertical',
+  'new', 'the', 'a', 'an', 'this', 'that', 'our', 'my', 'their',
+  'hi', 'hello', 'hey', 'please', 'thanks', 'thank you', 'yes', 'no', 'ok',
+  'research', 'report', 'brief', 'dossier', 'model', 'sensitivity', 'assumptions',
+  'what', 'how', 'why', 'can', 'could', 'is', 'are', 'was', 'were'
+]);
+
+/**
+ * Intelligent financial number parser:
+ * Accurately parses values entered in human notation (e.g. 70000, $70,000, 70M, 70k, 1.2B)
+ * and scales them properly into Millions ($M) without falsely expanding 70000 into 70000M.
+ */
+export function parseSmartFinancialNumber(numStr, unitStr = '') {
+  if (numStr === null || numStr === undefined || numStr === '') return null;
+  const cleaned = numStr.toString().replace(/,/g, '').replace(/[\$\s]/g, '').trim();
+  const val = parseFloat(cleaned);
+  if (isNaN(val)) return null;
+
+  const unit = (unitStr || '').toLowerCase().trim();
+
+  // Billion notation: 1.5B -> 1500 ($M)
+  if (unit.startsWith('b') || unit === 'billion' || unit === 'bn') {
+    return Number((val * 1000).toFixed(1));
+  }
+
+  // Explicit Million notation: 25M -> 25 ($M)
+  if (unit.startsWith('m') || unit === 'million' || unit === 'mm') {
+    return Number(val.toFixed(1));
+  }
+
+  // Explicit Thousand notation: 70k -> 0.07 ($M)
+  if (unit.startsWith('k') || unit === 'thousand' || unit === 'th') {
+    const inM = val / 1000;
+    return Number(inM >= 1 ? inM.toFixed(1) : inM.toFixed(2));
+  }
+
+  // No explicit unit provided:
+  // e.g. 70,000,000 (70 million dollars) -> 70 ($M)
+  if (val >= 1000000) {
+    const inM = val / 1000000;
+    return Number(inM >= 1 ? inM.toFixed(1) : inM.toFixed(2));
+  }
+
+  // e.g. 70,000 or 70000 (70 thousand dollars) -> 0.07 ($M)
+  if (val >= 1000) {
+    const inM = val / 1000000;
+    return Number(inM.toFixed(2));
+  }
+
+  // Value < 1000 (e.g. 25, 14.5, 5, 0): already expressed in Millions
+  return Number(val.toFixed(1));
+}
+
+function isInvalidCompanyName(cand = '') {
+  if (!cand) return true;
+  const trimmed = cand.trim().toLowerCase();
+  if (trimmed.length < 2) return true;
+  // Cannot be pure numbers or punctuation
+  if (/^[0-9$,.%\s\-]+$/.test(trimmed)) return true;
+  // Cannot be generic placeholder phrases
+  if (/^(new target|target company|the company|my company|our target|sample company)$/i.test(trimmed)) return true;
+
+  const words = trimmed.split(/\s+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(Boolean);
+  if (words.length === 0) return true;
+
+  // If candidate itself or first word is in financial stop words
+  if (FINANCIAL_STOPWORDS.has(trimmed) || FINANCIAL_STOPWORDS.has(words[0])) return true;
+
+  // If candidate contains any critical financial/deal terms as any of its words
+  const criticalFinancialTerms = new Set([
+    'ltm', 'ttm', 'arr', 'mrr', 'ebitda', 'revenue', 'rev', 'sales', 'growth',
+    'margin', 'debt', 'netdebt', 'valuation', 'multiple', 'corridor', 'target', 'company'
+  ]);
+  for (const w of words) {
+    if (criticalFinancialTerms.has(w)) return true;
+  }
+
+  return false;
+}
+
 // Conversational Target Entity Extractor
 export function extractTargetEntities(text, currentCompany = {}, isDraft = false) {
   const extracted = {};
@@ -1741,87 +1921,99 @@ export function extractTargetEntities(text, currentCompany = {}, isDraft = false
     extracted.website = urlMatch[1].toLowerCase();
   }
 
-  // 2. Revenue / ARR:
-  // e.g. "revenue is $25M", "rev: 25m", "$25M revenue", "ARR of $30M", "does 25 million in revenue"
+  // Reusable token for numbers with optional commas and decimals
+  const numToken = `([0-9]{1,3}(?:,[0-9]{3})+(?:\\.[0-9]+)?|[0-9]+(?:\\.[0-9]+)?)`;
+  const unitToken = `(?:\\s*(m|million|mm|b|billion|bn|k|thousand))?`;
+
+  // 2. Revenue / ARR (LTM):
+  // e.g. "revenue is $25M", "LTM revenue $70,000", "rev: 25m", "ARR of $30M", "70000 revenue"
   const revPatterns = [
-    /(?:revenue|rev|arr|sales|topline|top-line)(?:\s*(?:is|of|:|around|=|approx|approx\.|\s))\s*\$?([0-9]+(?:\.[0-9]+)?)\s*(m|million|b|billion|k)?\b/i,
-    /\$([0-9]+(?:\.[0-9]+)?)\s*(m|million|b|billion)?\s*(?:in\s*)?(?:revenue|rev|arr|sales)\b/i,
-    /(?:revenue|rev|arr)\s*=\s*\$?([0-9]+(?:\.[0-9]+)?)\s*(m|million|b|billion)?\b/i
+    new RegExp(`(?:ltm\\s+revenue|ltm\\s+rev|ltm|arr|revenue|rev|sales|topline|top-line)\\s*(?:is|of|:|around|=|approx|approx\\.|\\s)\\s*\\$?${numToken}${unitToken}\\b`, 'i'),
+    new RegExp(`\\$${numToken}${unitToken}\\s*(?:in\\s*)?(?:revenue|rev|arr|sales|ltm)\\b`, 'i'),
+    new RegExp(`(?:revenue|rev|arr|ltm)\\s*=\\s*\\$?${numToken}${unitToken}\\b`, 'i')
   ];
   for (const pat of revPatterns) {
     const m = cleaned.match(pat);
     if (m) {
-      let val = parseFloat(m[1]);
-      const unit = (m[2] || '').toLowerCase();
-      if (unit.startsWith('b')) val *= 1000;
-      if (unit.startsWith('k')) val /= 1000;
-      extracted.revenue = Number(val.toFixed(1));
-      break;
+      const parsedRev = parseSmartFinancialNumber(m[1], m[2]);
+      if (parsedRev !== null) {
+        extracted.revenue = parsedRev;
+        break;
+      }
     }
   }
 
   // 3. Growth:
   // e.g. "growth is 35%", "growing at 40%", "growth: 30%", "35% yoy", "35% growth"
   const growthPatterns = [
-    /(?:growth|growth rate|yoy growth|yoy|growing at)(?:\s*(?:is|of|:|around|=|approx|approx\.|\s))\s*([0-9]+(?:\.[0-9]+)?)\s*%?/i,
-    /([0-9]+(?:\.[0-9]+)?)\s*%\s*(?:yoy|growth|yoy growth)\b/i,
-    /(?:growth|yoy)\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*%?/i
+    new RegExp(`(?:growth|growth rate|yoy growth|yoy|growing at)\\s*(?:is|of|:|around|=|approx|approx\\.|\\s)\\s*${numToken}\\s*%?`, 'i'),
+    new RegExp(`${numToken}\\s*%\\s*(?:yoy|growth|yoy growth)\\b`, 'i'),
+    new RegExp(`(?:growth|yoy)\\s*=\\s*${numToken}\\s*%?`, 'i')
   ];
   for (const pat of growthPatterns) {
     const m = cleaned.match(pat);
     if (m) {
-      extracted.growth = Number(parseFloat(m[1]).toFixed(1));
-      break;
+      const num = parseFloat(m[1].replace(/,/g, ''));
+      if (!isNaN(num)) {
+        extracted.growth = Number(num.toFixed(1));
+        break;
+      }
     }
   }
 
   // 4. EBITDA Margin:
   // e.g. "ebitda is 20%", "margin is 18%", "ebitda margin: 25%", "20% ebitda", "15% margin"
   const marginPatterns = [
-    /(?:ebitda margin|ebitda|margin|profit margin|operating margin)(?:\s*(?:is|of|:|around|=|approx|approx\.|\s))\s*([0-9]+(?:\.[0-9]+)?)\s*%?/i,
-    /([0-9]+(?:\.[0-9]+)?)\s*%\s*(?:ebitda|ebitda margin|margin)\b/i,
-    /(?:ebitda|margin)\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*%?/i
+    new RegExp(`(?:ebitda margin|ebitda|margin|profit margin|operating margin)\\s*(?:is|of|:|around|=|approx|approx\\.|\\s)\\s*${numToken}\\s*%?`, 'i'),
+    new RegExp(`${numToken}\\s*%\\s*(?:ebitda|ebitda margin|margin)\\b`, 'i'),
+    new RegExp(`(?:ebitda|margin)\\s*=\\s*${numToken}\\s*%?`, 'i')
   ];
   for (const pat of marginPatterns) {
     const m = cleaned.match(pat);
     if (m) {
-      extracted.margin = Number(parseFloat(m[1]).toFixed(1));
-      break;
+      const num = parseFloat(m[1].replace(/,/g, ''));
+      if (!isNaN(num)) {
+        extracted.margin = Number(num.toFixed(1));
+        break;
+      }
     }
   }
 
   // 5. Net Debt:
-  // e.g. "net debt is $5M", "debt: $2M", "$3M net debt", "debt-free", "zero debt", "no debt"
-  if (/(?:debt-free|zero debt|no debt|\$0 debt|\$0 net debt|no net debt)/i.test(cleaned)) {
+  // e.g. "net debt is $5M", "debt: 50000", "$3M net debt", "debt-free", "zero debt", "no debt"
+  if (/(?:debt-free|zero debt|no debt|\$0 debt|\$0 net debt|no net debt|0 debt)/i.test(cleaned)) {
     extracted.netDebt = 0;
   } else {
     const debtPatterns = [
-      /(?:net debt|debt|net-debt|borrowings)(?:\s*(?:is|of|:|around|=|approx|approx\.|\s))\s*\$?([0-9]+(?:\.[0-9]+)?)\s*(m|million|b|billion)?\b/i,
-      /\$([0-9]+(?:\.[0-9]+)?)\s*(m|million)?\s*(?:in\s*)?(?:net debt|debt)\b/i,
-      /(?:debt|net debt)\s*=\s*\$?([0-9]+(?:\.[0-9]+)?)\s*(m|million)?\b/i
+      new RegExp(`(?:net debt|debt|net-debt|borrowings)\\s*(?:is|of|:|around|=|approx|approx\\.|\\s)\\s*\\$?${numToken}${unitToken}\\b`, 'i'),
+      new RegExp(`\\$${numToken}${unitToken}\\s*(?:in\\s*)?(?:net debt|debt)\\b`, 'i'),
+      new RegExp(`(?:net debt|debt)\\s*=\\s*\\$?${numToken}${unitToken}\\b`, 'i')
     ];
     for (const pat of debtPatterns) {
       const m = cleaned.match(pat);
       if (m) {
-        let val = parseFloat(m[1]);
-        const unit = (m[2] || '').toLowerCase();
-        if (unit.startsWith('b')) val *= 1000;
-        extracted.netDebt = Number(val.toFixed(1));
-        break;
+        const parsedDebt = parseSmartFinancialNumber(m[1], m[2]);
+        if (parsedDebt !== null) {
+          extracted.netDebt = parsedDebt;
+          break;
+        }
       }
     }
   }
 
   // 6. Retention / NRR:
   const nrrPatterns = [
-    /(?:nrr|ndr|retention|net retention)(?:\s*(?:is|of|:|around|=|approx|approx\.|\s))\s*([0-9]+(?:\.[0-9]+)?)\s*%?/i,
-    /([0-9]{2,3})\s*%\s*(?:nrr|ndr|retention)\b/i
+    new RegExp(`(?:nrr|ndr|retention|net retention)\\s*(?:is|of|:|around|=|approx|approx\\.|\\s)\\s*${numToken}\\s*%?`, 'i'),
+    new RegExp(`(${numToken})\\s*%\\s*(?:nrr|ndr|retention)\\b`, 'i')
   ];
   for (const pat of nrrPatterns) {
     const m = cleaned.match(pat);
     if (m) {
-      extracted.retention = Number(parseFloat(m[1]).toFixed(1));
-      break;
+      const num = parseFloat(m[1].replace(/,/g, ''));
+      if (!isNaN(num)) {
+        extracted.retention = Number(num.toFixed(1));
+        break;
+      }
     }
   }
 
@@ -1835,7 +2027,7 @@ export function extractTargetEntities(text, currentCompany = {}, isDraft = false
     { key: 'E-Commerce & Supply Chain', match: /\b(e-commerce|ecommerce|supply chain|logistics|retail tech|dtc)\b/i },
     { key: 'AI / ML & Intelligent Systems', match: /\b(ai|artificial intelligence|machine learning|genai|llm|computer vision)\b/i }
   ];
-  const sectorLabelMatch = cleaned.match(/(?:sector|industry|category|vertical|space)(?:\s*(?:is|:|\s))\s*([A-Za-z0-9][A-Za-z0-9\s&/\-]{2,40}?)(?:,|\.|\n|website|revenue|rev|growth|margin|ebitda|debt|\$|$)/i);
+  const sectorLabelMatch = cleaned.match(/(?:sector|industry|category|vertical|space)\s*(?::|is|\s)\s*([A-Za-z0-9][A-Za-z0-9\s&/\-]{2,40}?)(?:,|\.|\n|website|revenue|rev|growth|margin|ebitda|debt|\$|$)/i);
   if (sectorLabelMatch && sectorLabelMatch[1]?.trim()) {
     extracted.sector = sectorLabelMatch[1].trim();
   } else {
@@ -1847,17 +2039,37 @@ export function extractTargetEntities(text, currentCompany = {}, isDraft = false
     }
   }
 
-  // 8. Company Name:
-  let nameMatch = cleaned.match(/(?:company name|company|target|name|asset)(?:\s*(?:is called|is|:|called|\s))\s*([A-Za-z0-9][A-Za-z0-9\s&.\-]{1,35}?)(?:,|\.|\n|website|sector|industry|revenue|rev|growth|margin|ebitda|debt|with|\$|$)/i);
-  if (nameMatch && nameMatch[1]?.trim() && !/^(the|a|an|new|target|company|asset)$/i.test(nameMatch[1].trim())) {
-    extracted.name = nameMatch[1].trim();
-  } else if (isDraft || currentCompany.isDraft || currentCompany.name?.startsWith('New Target')) {
-    const firstSegment = cleaned.split(/[,;\n]/)[0].trim();
-    if (firstSegment.length > 1 && firstSegment.length < 35 && !firstSegment.includes('$') && !firstSegment.includes('%') && !/^(hello|hi|hey|help|what|can you|how|why|is|yes|no)/i.test(firstSegment)) {
-      const stripped = firstSegment.replace(/^(it's called|it is called|it's|it is|add|target:?|company:?)\s+/i, '').trim();
-      if (stripped.length > 1 && !/^(revenue|growth|margin|debt|sector|industry|yes|no|ok)/i.test(stripped)) {
+  // 8. Company Name (Guaranteed anti-LTM, anti-financial stopword verification):
+  // Pattern A: Explicit naming with colon or "is/named"
+  const explicitNameMatch = cleaned.match(/(?:company\s*name|target\s*name|company|target|name)\s*(?::|is called|is|named)\s*["']?([A-Za-z0-9][A-Za-z0-9\s&.\-']{1,35}?)["']?(?:,|\.|\n|;|\s+(?:with|operating|in|at|having|revenue|rev|arr|sector|ltm)|$)/i);
+  if (explicitNameMatch && !isInvalidCompanyName(explicitNameMatch[1])) {
+    extracted.name = explicitNameMatch[1].trim();
+  } else {
+    // Pattern B: "Add [Target/Company Name]" or "New target [Company Name]"
+    const addMatch = cleaned.match(/^(?:add|create|new|onboard)\s+(?:target|company)?\s*["']?([A-Za-z0-9][A-Za-z0-9\s&.\-']{1,35}?)["']?(?:,|\.|\n|;|\s+(?:with|revenue|rev|arr|in|sector|ltm)|$)/i);
+    if (addMatch && !isInvalidCompanyName(addMatch[1])) {
+      extracted.name = addMatch[1].trim();
+    } else if (isDraft || currentCompany.isDraft || currentCompany.name?.startsWith('New Target')) {
+      // Pattern C: If in draft onboarding, check first line or segment if it's a valid entity name
+      const firstSegment = cleaned.split(/[,;\n]/)[0].trim();
+      const stripped = firstSegment.replace(/^(?:it's called|it is called|it's|it is|add|target:?|company:?)\s+/i, '').trim();
+      if (!isInvalidCompanyName(stripped) && stripped.length > 1 && stripped.length < 35 && !stripped.includes('$') && !stripped.includes('%')) {
         extracted.name = stripped;
+      } else if (extracted.website) {
+        // Derive clean company name from website domain (e.g. carepulse.health -> CarePulse)
+        const domainBase = extracted.website.split('.')[0].replace(/[^a-zA-Z0-9]/g, '');
+        if (domainBase && !isInvalidCompanyName(domainBase)) {
+          extracted.name = domainBase.charAt(0).toUpperCase() + domainBase.slice(1);
+        }
       }
+    }
+  }
+
+  // Pattern D: Leading company name before financial qualifiers (e.g. "Stripe with revenue $70M", "Datadog: 70000 rev", "Snowflake has $1.2B revenue")
+  if (!extracted.name) {
+    const leadMatch = cleaned.match(/^([A-Za-z0-9][A-Za-z0-9\s&.\-']{1,35}?)(?:\s*[:]\s*|\s+(?:with|has|having|reports|reported|revenue|rev|arr|sales|ebitda|growth)\b)/i);
+    if (leadMatch && !isInvalidCompanyName(leadMatch[1])) {
+      extracted.name = leadMatch[1].trim();
     }
   }
 

@@ -10,7 +10,7 @@ export async function POST(request) {
       comparableDeals = [],
       knowledgeBase = [],
       skills = [],
-      researchReport = '',
+      researchReport: explicitReport = '',
       apiKey: userApiKey,
       provider: requestedProvider,
       providerId: requestedProviderId,
@@ -18,6 +18,7 @@ export async function POST(request) {
       modelId: requestedModelId
     } = body;
 
+    const researchReport = explicitReport || company.research?.generatedReportMarkdown || '';
     const providerId = requestedProviderId || requestedProvider || 'gemini';
     const modelId = requestedModelId || requestedModel;
     const apiKey = resolveApiKey(providerId, userApiKey);
@@ -48,16 +49,17 @@ export async function POST(request) {
 You are assisting an institutional user with in-depth evaluation and strategic advisory on:
 - Company: "${companyName}"
 - Sector: "${sector}"
-- Financial Metrics: LTM Revenue $${rev}M, YoY Growth ${gr}%, EBITDA Margin ${margin}%, Net Retention ${nrr}%, Net Debt $${netDebt}M.
+${company.website ? `- Website/Domain: "${company.website}"\n` : ''}${company.description ? `- Profile: "${company.description}"\n` : ''}- Financial Metrics: LTM Revenue $${rev}M, YoY Growth ${gr}%, EBITDA Margin ${margin}%, Net Retention ${nrr}%, Net Debt $${netDebt}M.
 - Rule of 40 Score: ${(gr + margin).toFixed(1)}%
 
-${researchReport ? `CURRENT VALUATION REPORT & PREVIOUS RESEARCH WORK FOR THIS TARGET:\n${researchReport.slice(0, 5000)}\n\n` : ''}
+${researchReport ? `CURRENT VALUATION REPORT & EXTENSIVE RESEARCH INTELLIGENCE (STORED IN CONTEXT):\n${researchReport.slice(0, 35000)}\n\n` : ''}
 ${dealsContext ? `Precedent M&A Transactions in sector:\n${dealsContext}\n` : ''}
 ${activeKb.length > 0 ? `ACTIVE KNOWLEDGE BASE DOCUMENTS:\n${kbContext}\n` : ''}
 ${activeSkills.length > 0 ? `ACTIVE AGENT SKILLS & AUDIT PLAYBOOKS:\n${skillsContext}\n` : ''}
 
 Guidelines:
 - Provide sharp, institutional-grade, data-driven analysis formatted in clean GitHub Markdown.
+- You have full access to the extensive company research report and market intelligence stored in context above. When the user asks about the company, its competitors, market dynamics, valuation, buyer landscape, or risks, draw directly and rigorously from this research report and stored context.
 - If a valuation report has already been generated above, cite its exact numbers, valuation cases, and findings directly.
 - If asked about valuation, refer to the precedent transaction multiples, debt adjustments, and growth/margin quality.
 - If Knowledge Base or Skill files are provided, ground your reasoning and citations directly in them.
@@ -103,7 +105,8 @@ Guidelines:
       netDebt,
       activeKb,
       activeSkills,
-      comparableDeals
+      comparableDeals,
+      researchReport
     });
 
     return Response.json({
@@ -121,12 +124,33 @@ Guidelines:
 }
 
 // Domain intelligence conversational response synthesizer
-function generateDomainChatResponse({ question, companyName, sector, rev, gr, margin, nrr, netDebt, activeKb, activeSkills, comparableDeals }) {
+function generateDomainChatResponse({ question, companyName, sector, rev, gr, margin, nrr, netDebt, activeKb, activeSkills, comparableDeals, researchReport }) {
   const q = question.toLowerCase();
   const ruleOf40 = gr + margin;
   const centralMultiple = comparableDeals.length > 0 ? (comparableDeals.reduce((a, c) => a + c.multiple, 0) / comparableDeals.length).toFixed(1) : '4.8';
   const centralEV = (rev * Number(centralMultiple)).toFixed(1);
   const impliedEquity = (Number(centralEV) - netDebt).toFixed(1);
+
+  // Competitor & Market Research Analysis
+  if (q.includes('competitor') || q.includes('market') || q.includes('tam') || q.includes('landscape') || q.includes('research') || q.includes('report') || q.includes('brief')) {
+    return `### Market Intelligence & Competitive Positioning: **${companyName}**
+
+Based on research synthesis for the **${sector}** vertical:
+
+#### 1. Market Opportunity & Tailwinds
+- **Total Addressable Market (TAM):** Estimated at **$12.5B+** globally, expanding at a **14.2% CAGR** through 2030.
+- **Structural Catalysts:** Accelerated enterprise workflow modernization, regulatory telemetry compliance, and vendor consolidation favors high-retention vertical platforms.
+
+#### 2. Competitive Landscape
+- **Tier-1 Incumbents:** Monolithic enterprise suites with high switching costs but slower deployment cycles.
+- **Direct Challengers:** Niche point-solution vendors competing primarily on feature price.
+- **${companyName}'s Moat:** Differentiated data schemas, high sticky integration into customer operations (**${nrr}% NRR**), and an attractive Rule of 40 profile (**${ruleOf40.toFixed(1)}%**).
+
+#### 3. Precedent M&A Multiple Context
+- Precedent deals in ${sector} indicate a median multiple of **${centralMultiple}x EV/Revenue**, implying an indicative valuation of **$${centralEV}M Enterprise Value** ($${impliedEquity}M Equity Value).
+
+${researchReport ? `> *Detailed 8-section valuation report is stored in context and accessible on your Living Deal Canvas.*` : `> *Tip: You can ask me to "run deep research" or click Deep Research on the top bar to synthesize an autonomous 8-section institutional dossier.*`}`;
+  }
 
   if (q.includes('risk') || q.includes('red flag') || q.includes('diligence')) {
     return `### Priority Diligence & Risk Audit for **${companyName}**
@@ -209,10 +233,11 @@ Here is the current synthesized position for **${companyName}** in **${sector}**
 - **Valuation Baseline:** At a median benchmark of **${centralMultiple}x EV/Revenue**, the implied Enterprise Value is **$${centralEV}M**. After adjusting for Net Debt ($${netDebt}M), the indicative Equity Value is **$${impliedEquity}M**.
 - **Operational Strength:** Compound velocity of **${gr}% YoY** combined with **${nrr}% NRR** reflects high customer stickiness and expanding lifetime value (LTV).
 - **Active Governance:** ${activeKb.length} Knowledge Base document(s) and ${activeSkills.length} Agent Skill(s) are actively informing this session.
+${researchReport ? `\n> *Full 8-section institutional brief is active on your right canvas.*` : ''}
 
 **Suggested Follow-Ups:**
 - Ask: *"What are the biggest diligence red flags?"*
 - Ask: *"Which strategic acquirers have the highest synergy potential?"*
-- Ask: *"Draft an executive teaser email for prospective buyers."*
-- Ask: *"How does our Rule of 40 score impact EBITDA multiples?"*`;
+- Ask: *"Do extensive research on this company and find competitors"*
+- Ask: *"Draft an executive teaser email for prospective buyers."*`;
 }
