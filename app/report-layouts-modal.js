@@ -284,7 +284,7 @@ export default function ReportLayoutsModal({
                     onChange={e => setNewSections(e.target.value)}
                   />
                   <span className="form-hint">
-                    The report synthesizer will structure its evaluation brief strictly according to this custom section layout.
+                    The report synthesizer will structure its evaluation report strictly according to this custom section layout.
                   </span>
                 </div>
 

@@ -139,8 +139,8 @@ const defaultSkills = [
 const defaultLayouts = [
   {
     id: 'layout-standard-ma',
-    name: 'Standard Institutional M&A Brief',
-    description: 'Industry-standard 8-section investment banking market brief and valuation memorandum.',
+    name: 'Standard Institutional M&A Report',
+    description: 'Industry-standard 8-section investment banking valuation report and memorandum.',
     isDefault: true,
     sections: [
       '1. Executive Summary & Investment Thesis',
@@ -302,15 +302,15 @@ export default function Home() {
   // Initialize theme, AI settings, and state from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      // 1. Load Custom Companies
+      // 1. Load Custom Companies and Filter Deleted Companies
       try {
         const storedCustom = localStorage.getItem('dealbrief_custom_companies_v1');
-        if (storedCustom) {
-          const parsed = JSON.parse(storedCustom);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setCompanies([...parsed, ...defaultCompanies]);
-          }
-        }
+        const deletedIds = JSON.parse(localStorage.getItem('dealbrief_deleted_company_ids_v1') || '[]');
+        const deletedSet = new Set(deletedIds);
+        const parsedCustom = storedCustom ? JSON.parse(storedCustom) : [];
+        const base = defaultCompanies.filter(c => !deletedSet.has(c.id));
+        const custom = Array.isArray(parsedCustom) ? parsedCustom.filter(c => !deletedSet.has(c.id)) : [];
+        setCompanies([...custom, ...base]);
       } catch (e) {
         console.error('Failed to load custom companies:', e);
       }
@@ -427,7 +427,9 @@ export default function Home() {
           if (res.success && res.data) {
             setDbConnected(true);
             if (Array.isArray(res.data.companies) && res.data.companies.length > 0) {
-              setCompanies(res.data.companies);
+              const deletedIds = JSON.parse(localStorage.getItem('dealbrief_deleted_company_ids_v1') || '[]');
+              const deletedSet = new Set(deletedIds);
+              setCompanies(res.data.companies.filter(c => !deletedSet.has(c.id)));
             }
             if (Array.isArray(res.data.knowledgeBase) && res.data.knowledgeBase.length > 0) {
               setKnowledgeBase(res.data.knowledgeBase);
@@ -519,6 +521,9 @@ export default function Home() {
       try {
         const customOnly = updated.filter(c => c.isCustom);
         localStorage.setItem('dealbrief_custom_companies_v1', JSON.stringify(customOnly));
+        const deletedIds = JSON.parse(localStorage.getItem('dealbrief_deleted_company_ids_v1') || '[]');
+        const updatedDeleted = deletedIds.filter(id => id !== newCompany.id);
+        localStorage.setItem('dealbrief_deleted_company_ids_v1', JSON.stringify(updatedDeleted));
       } catch (e) {
         console.error('Failed to persist custom company:', e);
       }
@@ -543,6 +548,11 @@ export default function Home() {
       try {
         const customOnly = updated.filter(c => c.isCustom);
         localStorage.setItem('dealbrief_custom_companies_v1', JSON.stringify(customOnly));
+        const deletedIds = JSON.parse(localStorage.getItem('dealbrief_deleted_company_ids_v1') || '[]');
+        if (!deletedIds.includes(companyId)) {
+          deletedIds.push(companyId);
+          localStorage.setItem('dealbrief_deleted_company_ids_v1', JSON.stringify(deletedIds));
+        }
       } catch (e) {}
       return updated;
     });
@@ -651,34 +661,14 @@ export default function Home() {
             <div className="dropdown-wrapper" ref={dropdownRef}>
               <button
                 type="button"
-                className="btn btn-outline btn-sm dropdown-trigger"
+                className="btn btn-outline btn-sm btn-icon dropdown-trigger"
                 onClick={() => setIsDropdownOpen(prev => !prev)}
                 aria-expanded={isDropdownOpen}
                 aria-haspopup="true"
-                style={{ gap: '0.45rem' }}
+                title="Agent Tools & Setup (AI, Knowledge Base, Skills, Layouts)"
+                aria-label="Agent Tools & Setup"
               >
-                <SlidersHorizontal size={13} />
-                <span>Agent Tools & Setup</span>
-                <span className="badge badge-secondary" style={{ fontSize: '0.625rem', padding: '0.1rem 0.35rem' }}>
-                  {activeKbCount + activeSkillsCount}
-                </span>
-                <span
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: '50%',
-                    backgroundColor: hasActiveKey ? '#10b981' : '#f59e0b',
-                    display: 'inline-block'
-                  }}
-                  title={hasActiveKey ? `${activeProviderLabel} Active (${activeModel})` : `${activeProviderLabel} Not Configured (Click AI Settings)`}
-                />
-                <ChevronDown
-                  size={12}
-                  style={{
-                    transition: 'transform 0.15s ease',
-                    transform: isDropdownOpen ? 'rotate(180deg)' : 'none'
-                  }}
-                />
+                <SlidersHorizontal size={14} />
               </button>
 
               {isDropdownOpen && (
@@ -806,7 +796,7 @@ export default function Home() {
                     role="menuitem"
                     onClick={() => {
                       setIsDropdownOpen(false);
-                      setToast('Neon PostgreSQL is active. All companies, research briefs, and scenarios synchronize to cloud automatically.');
+                      setToast('Neon PostgreSQL is active. All companies, research reports, and scenarios synchronize to cloud automatically.');
                     }}
                   >
                     <div className="dropdown-item-content">

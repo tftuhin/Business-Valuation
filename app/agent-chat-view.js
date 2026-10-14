@@ -32,7 +32,7 @@ export default function AgentChatView({
 I have full operational awareness of:
 - **Target Financial Profile:** $${financials?.revenue || company?.revenue || '28M'} LTM Revenue, ${financials?.growth || company?.growth || '34%'} YoY Growth, ${financials?.margin || company?.margin || '19%'} EBITDA Margin, ${financials?.retention || company?.retention || '114%'} NRR.
 - **Precedent M&A Benchmark Deals:** ${comparableDeals.length} precedent sector transactions calibrated.
-- **Research Status:** ${researchReport ? 'Institutional valuation brief synthesized & loaded into memory.' : 'Ready to analyze market signals and run valuation scenarios.'}
+- **Research Status:** ${researchReport ? 'Institutional valuation report synthesized & loaded into memory.' : 'Ready to analyze market signals and run valuation scenarios.'}
 - **Active Context:** ${(knowledgeBase || []).filter(k => k.enabled).length} Knowledge Base document(s) and ${(skills || []).filter(s => s.enabled).length} active Agent Skill(s).
 
 How can I assist your diligence or valuation analysis today? Select a categorized prompt below or type any custom query.`,
@@ -203,7 +203,7 @@ How can I assist your diligence or valuation analysis today? Select a categorize
           </span>
           {researchReport && (
             <span className="badge badge-success" style={{ fontSize: '0.6875rem', gap: '0.25rem' }}>
-              <FileText size={10} /> Valuation Brief Grounded
+              <FileText size={10} /> Valuation Report Grounded
             </span>
           )}
         </div>

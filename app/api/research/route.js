@@ -119,7 +119,7 @@ function generateFallbackResearch({ company, sector, revenue, growth, margin, re
   const medEV = Number((rev * medMult).toFixed(1));
   const highEV = Number((rev * highMult).toFixed(1));
 
-  const layoutTitle = reportLayout?.name || 'INSTITUTIONAL COMPANY MARKET BRIEF & VALUATION REPORT';
+  const layoutTitle = reportLayout?.name || 'INSTITUTIONAL COMPANY VALUATION REPORT';
 
   const reportMarkdown = `# ${layoutTitle.toUpperCase()}
 
@@ -367,7 +367,7 @@ Standard 8-Section Institutional Format:
 
     const prompt = `
 You are an elite Investment Banking M&A Director and Private Equity Research Analyst.
-Your mandate is to perform empirical, factual market research and an institutional M&A valuation brief.
+Your mandate is to perform empirical, factual market research and an institutional M&A valuation report.
 
 TARGET COMPANY PROFILE:
 - Target Company Name: "${companyName}"
@@ -441,7 +441,7 @@ Output ONLY a valid JSON object wrapped inside a \`\`\`json markdown code block 
     { "name": "Real Strategic Buyer Name", "type": "Strategic", "rationale": "Strategic acquisition rationale" },
     { "name": "Real PE Sponsor Name", "type": "Financial Sponsor", "rationale": "Platform fit or buy-and-build rationale" }
   ],
-  "reportMarkdown": "Complete, comprehensive institutional M&A valuation brief in GitHub Markdown following all layout requirements, tables, and sections."
+  "reportMarkdown": "Complete, comprehensive institutional M&A valuation report in GitHub Markdown following all layout requirements, tables, and sections."
 }
 `;
 
@@ -547,7 +547,7 @@ Output ONLY a valid JSON object wrapped inside a \`\`\`json markdown code block 
       }))),
       { timestamp: new Date(Date.now() - 2000).toISOString(), agent: 'Deal Scout Agent', message: `Discovered and verified ${deals.length} precedent M&A transactions in ${sector} (${dataLineage.verifiedCount} verified, ${dataLineage.aiCount} AI-researched).` },
       { timestamp: new Date(Date.now() - 1000).toISOString(), agent: 'Valuation Engine', message: `Computed multi-scenario enterprise range: $${lowEV}M to $${highEV}M (Median: $${medEV}M).` },
-      { timestamp: new Date().toISOString(), agent: 'Report Synthesizer', message: `Rendered institutional M&A valuation brief with citations and governance gate.` }
+      { timestamp: new Date().toISOString(), agent: 'Report Synthesizer', message: `Rendered institutional M&A valuation report with citations and governance gate.` }
     ];
 
     // Ensure reportMarkdown is clean markdown, never raw JSON

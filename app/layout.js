@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Company Market Brief | shadcn/ui Deal Intelligence',
-  description: 'AI-assisted M&A market research, precedent deal comps, and institutional valuation reports styled with shadcn/ui.'
+  title: 'Company Valuation Engine | Deal Intelligence',
+  description: 'AI-assisted M&A market research, similar deal comps, and institutional valuation reports.'
 };
 
 export default function RootLayout({ children }) {

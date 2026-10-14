@@ -8,7 +8,7 @@ import {
   ShieldCheck, Sparkles, TrendingUp, UsersRound, MessageSquare, BookOpen,
   Zap, LayoutTemplate, ArrowRight, Minus, ChevronsUpDown, Filter,
   Maximize2, Minimize2, ZoomIn, ZoomOut, CheckCheck, Trash2, Sliders, Layers,
-  AlertTriangle, Database, ShieldAlert
+  AlertTriangle, Database, ShieldAlert, X
 } from 'lucide-react';
 import AgentMonitor from './agent-monitor';
 import AgentChatView from './agent-chat-view';
@@ -495,6 +495,14 @@ export default function MarketBriefView({
 
   const [sellerId, setSellerId] = useState(sellers[0]?.id || '');
   const seller = sellers.find(item => item.id === sellerId) || sellers[0] || {};
+  const [companyToDelete, setCompanyToDelete] = useState(null);
+
+  // Automatically adjust active sellerId if currently selected company was removed
+  useEffect(() => {
+    if (sellers.length > 0 && !sellers.some(s => s.id === sellerId)) {
+      setSellerId(sellers[0].id);
+    }
+  }, [sellers, sellerId]);
 
   // Financial baseline
   const [revenue, setRevenue] = useState(parseAmountM(sellers[0]?.revenue || 25));
@@ -971,7 +979,7 @@ export default function MarketBriefView({
       activeLayoutId
     });
 
-    const sampleMarkdown = `# INSTITUTIONAL COMPANY MARKET BRIEF & VALUATION REPORT
+    const sampleMarkdown = `# INSTITUTIONAL COMPANY VALUATION REPORT
 
 **Target Company:** ${compName}  
 **Primary Sector:** ${sec}  
@@ -1088,7 +1096,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
         generatedReportFingerprint: sampleFingerprint,
         reportGeneratedAt: new Date().toISOString(),
         agentLogs: [
-          { timestamp: new Date().toISOString(), agent: 'Synthesizer Agent', message: `Synthesized instant institutional brief for "${compName}" (Fingerprint synchronized).` }
+          { timestamp: new Date().toISOString(), agent: 'Synthesizer Agent', message: `Synthesized instant report for "${compName}" (Fingerprint synchronized).` }
         ],
         groundingSources: [],
         activeDeals,
@@ -1100,7 +1108,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
       }
     });
     setWorkspacesRevision(v => v + 1);
-    onToast('Loaded & synchronized institutional valuation brief!');
+    onToast('Loaded & synchronized valuation report!');
   };
 
   const runAgentResearch = async () => {
@@ -1198,7 +1206,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
           setActiveTab('brief');
         }
 
-        onToast('Agent research complete! Institutional brief retained in company memory.');
+        onToast('Agent research complete! Report retained in company memory.');
       } else {
         throw new Error(data.error || 'Failed to complete agent research');
       }
@@ -1212,7 +1220,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
   const completeReview = () => {
     if (agentStatus !== 'completed' && !generatedReportMarkdown) return;
     if (!Object.values(reviewChecks).every(Boolean)) {
-      onToast('Complete all three banker verification checks before approving the brief.');
+      onToast('Complete all three banker verification checks before approving the report.');
       return;
     }
     const nextReviewed = !isApprovalValid;
@@ -1246,7 +1254,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${(seller?.name || 'Company').replace(/\s+/g, '_')}_Valuation_Brief.md`;
+    link.download = `${(seller?.name || 'Company').replace(/\s+/g, '_')}_Valuation_Report.md`;
     link.click();
     URL.revokeObjectURL(url);
     onToast('Report downloaded as Markdown file.');
@@ -1271,10 +1279,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
       {/* Page Header (shadcn style) */}
       <div className="page-header">
         <div className="page-header-title">
-          <h1>Company Market Brief & Valuation Engine</h1>
-          <p>
-            Autonomous AI agentic workflow for exhaustive company intelligence, precedent deal benchmarking, and institutional M&A valuation reports.
-          </p>
+          <h1>Company Valuation Engine</h1>
         </div>
 
         <div className="page-header-actions">
@@ -1342,18 +1347,40 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                 <div className="preset-details">
                   <div className="preset-name-row">
                     <span className="preset-name">{item.name}</span>
-                    {isSelected && (
-                      <span className="preset-active-check">
-                        <Check size={11} />
-                      </span>
-                    )}
+                    <div className="preset-card-actions">
+                      {isSelected && (
+                        <span className="preset-active-check">
+                          <Check size={11} />
+                        </span>
+                      )}
+                      {sellers.length > 1 && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="preset-delete-trigger"
+                          title={`Remove ${item.name} from workspace`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCompanyToDelete(item);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.stopPropagation();
+                              setCompanyToDelete(item);
+                            }
+                          }}
+                        >
+                          <Trash2 size={11} />
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <span className="preset-sector">{cardSector}</span>
                   <div className="preset-metrics-chips">
                     <span>{cardRev} Rev</span>
                     <span>{cardGrowth} YoY</span>
                     {hasReport ? (
-                      <span className="preset-badge-highlight">✓ Brief</span>
+                      <span className="preset-badge-highlight">✓ Report</span>
                     ) : chatCount > 0 ? (
                       <span className="preset-badge-highlight">💬 {chatCount}</span>
                     ) : (
@@ -1394,9 +1421,9 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
       <div className="tabs-list" role="tablist">
         {[
           { id: 'analysis', num: '1', label: 'Company & Market' },
-          { id: 'comps', num: '2', label: 'Precedent Deals', count: `${selectedDeals.length}` },
-          { id: 'brief', num: '3', label: 'Institutional Brief', isReady: Boolean(generatedReportMarkdown) },
-          { id: 'chat', num: '4', label: 'Agent Copilot', count: chatMessages.length > 0 ? `${chatMessages.length}` : null }
+          { id: 'comps', num: '2', label: 'Similar Deals', count: `${selectedDeals.length}` },
+          { id: 'brief', num: '3', label: 'Report', isReady: Boolean(generatedReportMarkdown) },
+          { id: 'chat', num: '4', label: 'AI Agent', count: chatMessages.length > 0 ? `${chatMessages.length}` : null }
         ].map((item) => (
           <button
             key={item.id}
@@ -1430,7 +1457,6 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                       STEP 01 · TARGET PROFILE & SCENARIOS
                     </span>
                     <h2 className="card-title">Target Company Intelligence</h2>
-                    <p className="card-description">Fine-tune target metrics or run instant sensitivity scenarios. All changes auto-save per target.</p>
                   </div>
 
                   <div className="card-header-actions-inline">
@@ -1495,6 +1521,18 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   </div>
                 </div>
                 <span className="badge badge-outline">{seller?.location || 'Verified Record'}</span>
+
+                {sellers.length > 1 && (
+                  <button
+                    type="button"
+                    className="remove-company-btn"
+                    onClick={() => setCompanyToDelete(seller)}
+                    title={`Remove ${seller?.name || 'company'} from active workspace`}
+                  >
+                    <Trash2 size={12} />
+                    <span>Remove Company</span>
+                  </button>
+                )}
               </div>
 
               {seller?.website && (
@@ -1642,7 +1680,6 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   STEP 02 · MARKET SIGNALS & DILIGENCE
                 </span>
                 <h2 className="card-title">Market Signals & Diligence Checklist</h2>
-                <p className="card-description">Automated AI assessment of primary investment thesis vs. priority audit items.</p>
               </div>
 
               <div className="evidence-grid">
@@ -1671,16 +1708,13 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                 </div>
               </div>
 
-              <div className="card-footer" style={{ justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '0.8125rem', color: 'hsl(var(--muted-foreground))' }}>
-                  Target intelligence calibrated. Proceed to precedent deals.
-                </span>
+              <div className="card-footer" style={{ justifyContent: 'flex-end' }}>
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
                   onClick={() => setActiveTab('comps')}
                 >
-                  <span>Continue to Precedent Comps</span>
+                  <span>Continue to Similar Deals</span>
                   <ArrowRight size={13} />
                 </button>
               </div>
@@ -1742,7 +1776,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
               <div className="card-footer" style={{ fontSize: '0.75rem', color: 'hsl(var(--muted-foreground))', lineHeight: 1.5 }}>
                 <Info size={13} style={{ flexShrink: 0, marginRight: '0.375rem' }} />
                 <span>
-                  Based on <strong>{selectedDeals.length} selected precedent deals</strong>. Approximate Equity Value = Enterprise Value − Net Debt (${netDebt}M).
+                  Based on <strong>{selectedDeals.length} selected similar deals</strong>. Approximate Equity Value = Enterprise Value − Net Debt (${netDebt}M).
                 </span>
               </div>
             </div>
@@ -1823,10 +1857,9 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
               <div className="card-header-row card-header-row-step1">
                 <div className="card-header-text">
                   <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'hsl(var(--muted-foreground))' }}>
-                    STEP 02 · PRECEDENT TRANSACTIONS
+                    STEP 02 · SIMILAR TRANSACTIONS
                   </span>
                   <h2 className="card-title">M&A Deal Comparables & Multiples Benchmark</h2>
-                  <p className="card-description">Toggle transactions to calibrate the benchmark multiple corridor for {companyName}.</p>
                 </div>
                 <div className="card-header-actions-inline">
                   <button
@@ -2038,7 +2071,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   className="btn btn-primary btn-sm"
                   onClick={() => setActiveTab('brief')}
                 >
-                  <span>Continue to Institutional Brief</span>
+                  <span>Continue to Report</span>
                   <ArrowRight size={13} />
                 </button>
               </div>
@@ -2166,7 +2199,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   title="Loads a fully prepared institutional report instantaneously"
                 >
                   <FileText size={14} />
-                  <span>Load Instant Sample Brief</span>
+                  <span>Load Instant Sample Report</span>
                 </button>
               </div>
             </div>
@@ -2192,7 +2225,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                     <div>
                       <h4 className="stale-banner-title">Report Outdated — Valuation Metrics Have Changed</h4>
                       <p className="stale-banner-desc">
-                        Underlying financials, net debt, or selected comparable transactions were modified after this brief was synthesized.
+                        Underlying financials, net debt, or selected comparable transactions were modified after this report was synthesized.
                         Live valuation metrics shown below reflect current numbers, whereas the generated text document reflects prior inputs.
                       </p>
                     </div>
@@ -2204,7 +2237,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                       onClick={loadInstantSampleBrief}
                     >
                       <RefreshCw size={13} />
-                      <span>Regenerate Brief to Sync</span>
+                      <span>Regenerate Report to Sync</span>
                     </button>
                   </div>
                 </div>
@@ -2326,7 +2359,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                       {isApprovalValid ? (
                         <><Check size={13} /> Institutional Review Approved</>
                       ) : (
-                        <><ShieldCheck size={13} /> {reviewed ? 'Re-Approve Updated Brief' : 'Sign Off as Reviewer'}</>
+                        <><ShieldCheck size={13} /> {reviewed ? 'Re-Approve Updated Report' : 'Sign Off as Reviewer'}</>
                       )}
                     </button>
                   </div>
@@ -2337,10 +2370,10 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
               <div className="report-action-toolbar">
                 <div>
                   <h2 style={{ fontSize: '1.25rem', fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>
-                    {companyName} — Institutional Valuation Brief
+                    {companyName} — Valuation Report
                   </h2>
                   <p style={{ fontSize: '0.8125rem', color: 'hsl(var(--muted-foreground))', margin: '0.15rem 0 0' }}>
-                    {sector} · Autonomous M&A Deal Intelligence Brief · Layout: {(reportLayouts.find(l => l.id === activeLayoutId)?.name) || 'Standard M&A'}
+                    {sector} · Autonomous M&A Deal Intelligence Report · Layout: {(reportLayouts.find(l => l.id === activeLayoutId)?.name) || 'Standard M&A'}
                   </p>
                 </div>
 
@@ -2416,7 +2449,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   { label: '2. Profile', id: 'section-2' },
                   { label: '3. Financials', id: 'section-3' },
                   { label: '4. Market Dynamics', id: 'section-4' },
-                  { label: '5. Precedent Deals', id: 'section-5' },
+                  { label: '5. Similar Deals', id: 'section-5' },
                   { label: '6. Valuation Corridor', id: 'section-6' },
                   { label: '7. Buyer Universe', id: 'section-7' },
                   { label: '8. Due Diligence', id: 'section-8' }
@@ -2455,7 +2488,7 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <strong style={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
-                          COMPANY MARKET BRIEF
+                          COMPANY VALUATION REPORT
                         </strong>
                         <span className="badge badge-outline" style={{ fontSize: '0.6875rem' }}>CONFIDENTIAL</span>
                       </div>
@@ -2527,14 +2560,14 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   className="btn btn-outline"
                   onClick={() => setActiveTab('comps')}
                 >
-                  ← Back to Comps
+                  ← Back to Similar Deals
                 </button>
                 <button
                   type="button"
                   className="btn btn-primary"
                   onClick={() => setActiveTab('chat')}
                 >
-                  <span>Consult Deal Copilot</span>
+                  <span>Consult AI Agent</span>
                   <MessageSquare size={14} />
                 </button>
               </div>
@@ -2561,6 +2594,60 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
           serverConfigured={serverConfigured}
           onToast={onToast}
         />
+      )}
+
+      {/* Remove Company Confirmation Modal */}
+      {companyToDelete && (
+        <div className="modal-overlay" onClick={() => setCompanyToDelete(null)} role="dialog" aria-modal="true">
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'hsl(var(--destructive))' }}>
+                  <AlertTriangle size={18} /> Remove Target Company
+                </h3>
+                <p className="modal-description">This action will remove the company from workspace</p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm btn-icon"
+                onClick={() => setCompanyToDelete(null)}
+                aria-label="Close dialog"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+              <p style={{ fontSize: '0.875rem', lineHeight: 1.5, color: 'hsl(var(--foreground))' }}>
+                Are you sure you want to remove <strong>{companyToDelete.name}</strong> ({companyToDelete.sector || 'Target'}) from the active evaluation pipeline?
+              </p>
+              <div style={{ padding: '0.75rem', borderRadius: '6px', background: 'hsl(var(--muted) / 0.5)', border: '1px solid hsl(var(--border))', fontSize: '0.8125rem', color: 'hsl(var(--muted-foreground))' }}>
+                All financial scenario calibrations, diligence notes, and synthesized reports for this company will be permanently cleared from local workspace and Neon PostgreSQL.
+              </div>
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setCompanyToDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-destructive btn-sm"
+                onClick={() => {
+                  const idToDelete = companyToDelete.id;
+                  setCompanyToDelete(null);
+                  onDeleteCompany(idToDelete);
+                }}
+                style={{ gap: '0.35rem' }}
+              >
+                <Trash2 size={13} />
+                <span>Confirm Remove</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

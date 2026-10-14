@@ -17,7 +17,7 @@ export default function AgentMonitor({ status = 'idle', logs = [], kbCount = 0, 
     { id: 2, name: 'Market Dynamics', desc: 'TAM, CAGR & competitive landscape', icon: Search },
     { id: 3, name: 'Deal Scout', desc: 'Precedent M&A transactions & multiples', icon: Activity },
     { id: 4, name: 'Valuation Engine', desc: 'Scenario modeling & equity bridge', icon: Cpu },
-    { id: 5, name: 'Report Synthesizer', desc: 'Institutional brief generation', icon: Sparkles }
+    { id: 5, name: 'Report Synthesizer', desc: 'Valuation report generation', icon: Sparkles }
   ];
 
   const isRunning = status === 'running';
