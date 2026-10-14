@@ -1196,10 +1196,40 @@ I have synthesized market intelligence, verified precedent transactions, and gen
                   </div>
                 )}
 
+                {/* 1. Executive Valuation Overview Hero Banner */}
                 <div className="corridor-overview-banner">
-                  <div>
-                    <span className="corridor-banner-eyebrow">Enterprise Value Range</span>
-                    <h3 className="corridor-banner-val">{revenue > 0 ? money(medianEV) : 'Pending Metrics'}</h3>
+                  <div className="corridor-banner-main">
+                    <div className="corridor-banner-header">
+                      <div className="corridor-eyebrow-group">
+                        <span className="corridor-banner-eyebrow">Enterprise Value Range</span>
+                        <span className="corridor-banner-hint">Precedent Comps</span>
+                      </div>
+                      {revenue > 0 ? (
+                        <div className="corridor-equity-pill">
+                          <span className="equity-pill-dot" />
+                          <span className="equity-pill-label">Indicative Equity</span>
+                          <strong className="equity-pill-val">{money(medianEquity)}</strong>
+                        </div>
+                      ) : (
+                        <span className="badge badge-secondary badge-xs">Intake Phase</span>
+                      )}
+                    </div>
+
+                    <div className="corridor-banner-metric-row">
+                      <h3 className="corridor-banner-val">
+                        {revenue > 0 ? (
+                          <>
+                            <span className="corridor-range-txt">{money(lowEV)} – {money(highEV)}</span>
+                            <span className="corridor-median-tag">
+                              Median: <strong>{money(medianEV)}</strong>
+                            </span>
+                          </>
+                        ) : (
+                          'Pending Metrics'
+                        )}
+                      </h3>
+                    </div>
+
                     <p className="corridor-banner-sub">
                       {revenue > 0 ? (
                         <>Central reference implies <strong>{multiples.median.toFixed(1)}x EV/Revenue</strong> on ${revenue}M LTM revenue.</>
@@ -1208,99 +1238,132 @@ I have synthesized market intelligence, verified precedent transactions, and gen
                       )}
                     </p>
                   </div>
-                  {revenue > 0 ? (
-                    <span className="badge badge-success" style={{ height: 'fit-content' }}>
-                      Indicative Equity: {money(medianEquity)}
-                    </span>
-                  ) : (
-                    <span className="badge badge-secondary" style={{ height: 'fit-content' }}>
-                      Intake Phase
-                    </span>
-                  )}
                 </div>
 
-                {/* Precedent Multiple Spread */}
+                {/* 2. Precedent Multiple Spread */}
                 <div className="card-sub-block">
                   <div className="sub-block-title-row">
-                    <span className="sub-block-title">Precedent Multiple Spread</span>
-                    <span className="badge badge-secondary badge-xs">EV / LTM Revenue</span>
+                    <div>
+                      <span className="sub-block-title">Precedent Multiple Spread</span>
+                      <span className="sub-block-sub">EV / LTM Revenue Multiples</span>
+                    </div>
+                    <span className="badge badge-secondary badge-xs">M&A Comps</span>
                   </div>
 
+                  {/* 3 Value Columns */}
                   <div className="spread-values-grid">
                     <div className="spread-val-col val-low">
-                      <span className="spread-label">Low ({multiples.low.toFixed(1)}x)</span>
+                      <span className="spread-label">Low (25th Pct)</span>
+                      <span className="spread-multiple-pill">{multiples.low.toFixed(1)}x</span>
                       <strong className="spread-num">{money(lowEV)}</strong>
                     </div>
                     <div className="spread-val-col val-median highlight">
-                      <span className="spread-label">Median Benchmark ({multiples.median.toFixed(1)}x)</span>
+                      <div className="spread-median-tag">Benchmark</div>
+                      <span className="spread-label">Median</span>
+                      <span className="spread-multiple-pill highlight">{multiples.median.toFixed(1)}x</span>
                       <strong className="spread-num text-emerald-500">{money(medianEV)}</strong>
                     </div>
                     <div className="spread-val-col val-high">
-                      <span className="spread-label">High ({multiples.high.toFixed(1)}x)</span>
+                      <span className="spread-label">High (75th Pct)</span>
+                      <span className="spread-multiple-pill">{multiples.high.toFixed(1)}x</span>
                       <strong className="spread-num">{money(highEV)}</strong>
                     </div>
                   </div>
 
+                  {/* Visual Range Track (Football Field Corridor) */}
                   <div className="spread-track-wrap">
                     <div className="spread-track-bar">
-                      <div className="spread-pin pin-low" style={{ left: '15%' }} />
-                      <div className="spread-pin pin-median" style={{ left: '50%' }} />
-                      <div className="spread-pin pin-high" style={{ left: '85%' }} />
+                      <div className="spread-active-band" style={{ left: '16%', right: '16%' }} />
+                      <div className="spread-pin pin-low" style={{ left: '16%' }} title={`Low: ${money(lowEV)} (${multiples.low.toFixed(1)}x)`} />
+                      <div className="spread-pin pin-median" style={{ left: '50%' }} title={`Median: ${money(medianEV)} (${multiples.median.toFixed(1)}x)`} />
+                      <div className="spread-pin pin-high" style={{ left: '84%' }} title={`High: ${money(highEV)} (${multiples.high.toFixed(1)}x)`} />
+                    </div>
+                    <div className="spread-axis-row">
+                      <span>Low {money(lowEV)}</span>
+                      <span className="axis-median">Median {money(medianEV)}</span>
+                      <span>High {money(highEV)}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Enterprise to Equity Value Bridge (Clean Institutional Waterfall + Formula) */}
+                {/* 3. Enterprise to Equity Value Bridge */}
                 <div className="card-sub-block bridge-block">
                   <div className="sub-block-title-row">
-                    <span className="sub-block-title">Enterprise to Equity Value Bridge</span>
+                    <div>
+                      <span className="sub-block-title">Enterprise to Equity Value Bridge</span>
+                      <span className="sub-block-sub">Capital Structure Adjustment</span>
+                    </div>
                     <span className="badge badge-secondary badge-xs">Median Reference</span>
                   </div>
 
-                  {/* Institutional Bridge Waterfall Table */}
-                  <div className="institutional-bridge-table">
-                    <div className="bridge-row">
-                      <div className="bridge-row-label">
-                        <span className="bridge-legend-dot dot-blue" />
-                        <span>Enterprise Value ({multiples.median.toFixed(1)}x EV/Rev)</span>
+                  {/* Clean Institutional Waterfall Bridge */}
+                  <div className="institutional-bridge-waterfall">
+                    <div className="waterfall-item-row step-ev">
+                      <div className="waterfall-lead">
+                        <span className="waterfall-badge-op op-add">+</span>
+                        <div className="waterfall-text">
+                          <span className="waterfall-title">Enterprise Value</span>
+                          <span className="waterfall-meta">{multiples.median.toFixed(1)}x EV/Rev on ${revenue}M LTM</span>
+                        </div>
                       </div>
-                      <span className="bridge-row-val">{money(medianEV)}</span>
+                      <span className="waterfall-val">{money(medianEV)}</span>
                     </div>
 
-                    <div className="bridge-row bridge-deduct-row">
-                      <div className="bridge-row-label">
-                        <span className="bridge-legend-dot dot-red" />
-                        <span>Less: Net Debt (Deduction)</span>
+                    <div className="waterfall-item-row step-debt">
+                      <div className="waterfall-lead">
+                        <span className="waterfall-badge-op op-sub">−</span>
+                        <div className="waterfall-text">
+                          <span className="waterfall-title">Less: Net Funded Debt</span>
+                          <span className="waterfall-meta">{netDebt > 0 ? `Funded debt deduction` : `Zero net funded debt`}</span>
+                        </div>
                       </div>
-                      <span className="bridge-row-val text-destructive">− {money(netDebt)}</span>
+                      <span className={`waterfall-val ${netDebt > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        {netDebt > 0 ? `− ${money(netDebt)}` : `$0M`}
+                      </span>
                     </div>
 
-                    <div className="bridge-divider" />
+                    <div className="waterfall-divider" />
 
-                    <div className="bridge-row bridge-result-row">
-                      <div className="bridge-row-label">
-                        <span className="bridge-legend-dot dot-green" />
-                        <strong>Indicative Equity Value (Net to Seller)</strong>
+                    <div className="waterfall-item-row step-equity highlight">
+                      <div className="waterfall-lead">
+                        <span className="waterfall-badge-op op-eq">=</span>
+                        <div className="waterfall-text">
+                          <strong className="waterfall-title-equity">Indicative Equity Value</strong>
+                          <span className="waterfall-meta">Net to Shareholders</span>
+                        </div>
                       </div>
-                      <strong className="bridge-row-val text-emerald-500">{money(medianEquity)}</strong>
+                      <strong className="waterfall-val-equity text-emerald-500">{money(medianEquity)}</strong>
                     </div>
                   </div>
 
-                  {/* Clean Visual Formula Bar */}
-                  <div className="bridge-formula-pill">
-                    <span className="formula-part ev-part">{money(medianEV)} EV</span>
-                    <span className="formula-op">−</span>
-                    <span className="formula-part debt-part">{money(netDebt)} Debt</span>
-                    <span className="formula-op">=</span>
-                    <span className="formula-part equity-part">{money(medianEquity)} Equity</span>
+                  {/* Clean Math Equation Ribbon */}
+                  <div className="bridge-equation-ribbon">
+                    <div className="equation-part">
+                      <span className="equation-lbl">EV</span>
+                      <strong className="equation-val">{money(medianEV)}</strong>
+                    </div>
+                    <span className="equation-sym">−</span>
+                    <div className="equation-part">
+                      <span className="equation-lbl">Debt</span>
+                      <strong className={`equation-val ${netDebt > 0 ? 'text-destructive' : ''}`}>{money(netDebt)}</strong>
+                    </div>
+                    <span className="equation-sym">=</span>
+                    <div className="equation-part is-result">
+                      <span className="equation-lbl">Equity</span>
+                      <strong className="equation-val text-emerald-500">{money(medianEquity)}</strong>
+                    </div>
                   </div>
                 </div>
 
-                {/* Valuation Scenarios Summary */}
+                {/* 4. Valuation Scenarios Summary */}
                 <div className="card-sub-block">
-                  <span className="sub-block-title" style={{ display: 'block', marginBottom: '0.5rem' }}>
-                    Benchmark Scenario Corridor
-                  </span>
+                  <div className="sub-block-title-row">
+                    <div>
+                      <span className="sub-block-title">Benchmark Scenario Corridor</span>
+                      <span className="sub-block-sub">3 Comparative Sensitivities</span>
+                    </div>
+                    <span className="badge badge-secondary badge-xs">Corridor</span>
+                  </div>
                   <div className="canvas-cases-list">
                     <div className="canvas-case-card">
                       <div>
