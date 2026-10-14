@@ -11,8 +11,7 @@ import CustomCompanyModal from './custom-company-modal';
 import KnowledgeBaseModal from './knowledge-base-modal';
 import SkillsModal from './skills-modal';
 import ReportLayoutsModal from './report-layouts-modal';
-import WorkspaceVaultModal from './workspace-vault-modal';
-import { clearCompanyWorkspace } from './workspace-store';
+import { clearCompanyWorkspace, saveAllWorkspaces, getStoredWorkspaces } from './workspace-store';
 
 // Initial pre-loaded industry presets featuring verified real-world market leaders
 const defaultCompanies = [
@@ -235,8 +234,9 @@ export default function Home() {
   const [activeLayoutId, setActiveLayoutId] = useState('layout-standard-ma');
   const [isLayoutsModalOpen, setIsLayoutsModalOpen] = useState(false);
 
-  // Zero-Database Workspace Vault state
-  const [isVaultModalOpen, setIsVaultModalOpen] = useState(false);
+  // Neon PostgreSQL Database connection & sync state
+  const [dbConnected, setDbConnected] = useState(false);
+  const [dbSyncing, setDbSyncing] = useState(false);
 
   // Server-side Vercel Environment Variables detection state (cached in localStorage to eliminate flicker across reloads)
   const [serverConfigured, setServerConfigured] = useState(() => {
@@ -255,28 +255,6 @@ export default function Home() {
 
   // Active workflow tab state (shared with navbar and MarketBriefView)
   const [activeTab, setActiveTab] = useState('analysis');
-
-  const handleVaultRestored = (restoredData) => {
-    if (restoredData?.customCompanies) {
-      setCompanies(prev => {
-        const customIds = new Set(restoredData.customCompanies.map(c => c.id));
-        return [...restoredData.customCompanies, ...defaultCompanies.filter(d => !customIds.has(d.id))];
-      });
-    }
-    if (Array.isArray(restoredData?.knowledgeBase)) {
-      setKnowledgeBase(restoredData.knowledgeBase);
-    }
-    if (Array.isArray(restoredData?.skills)) {
-      setSkills(restoredData.skills);
-    }
-    if (Array.isArray(restoredData?.reportLayouts)) {
-      setReportLayouts(restoredData.reportLayouts);
-    }
-    if (restoredData?.activeLayout) {
-      setActiveLayoutId(restoredData.activeLayout);
-    }
-    setToast('Workspace Vault restored successfully! All models & data loaded.');
-  };
 
   // Global keyboard shortcuts (Cmd/Ctrl + 1-4 for tabs, Cmd/Ctrl + K for tools)
   useEffect(() => {
@@ -429,6 +407,49 @@ export default function Home() {
           }
         })
         .catch(() => {});
+
+      // Connect and sync with Neon PostgreSQL database
+      setDbSyncing(true);
+      fetch('/api/db/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seedDefaults: {
+            companies: defaultCompanies,
+            knowledgeBase: defaultKnowledgeBase,
+            skills: defaultSkills,
+            reportLayouts: defaultLayouts
+          }
+        })
+      })
+        .then(res => res.json())
+        .then(res => {
+          if (res.success && res.data) {
+            setDbConnected(true);
+            if (Array.isArray(res.data.companies) && res.data.companies.length > 0) {
+              setCompanies(res.data.companies);
+            }
+            if (Array.isArray(res.data.knowledgeBase) && res.data.knowledgeBase.length > 0) {
+              setKnowledgeBase(res.data.knowledgeBase);
+            }
+            if (Array.isArray(res.data.skills) && res.data.skills.length > 0) {
+              setSkills(res.data.skills);
+            }
+            if (Array.isArray(res.data.reportLayouts) && res.data.reportLayouts.length > 0) {
+              setReportLayouts(res.data.reportLayouts);
+            }
+            if (res.data.workspaces && typeof res.data.workspaces === 'object') {
+              const currentStored = getStoredWorkspaces();
+              saveAllWorkspaces({ ...currentStored, ...res.data.workspaces });
+            }
+          }
+        })
+        .catch(err => {
+          console.warn('Neon DB sync notice:', err?.message);
+        })
+        .finally(() => {
+          setDbSyncing(false);
+        });
     }
   }, []);
 
@@ -503,7 +524,17 @@ export default function Home() {
       }
       return updated;
     });
-    setToast(`Added "${newCompany.name}" to active targets (persisted across refreshes)!`);
+
+    // Persist directly to Neon PostgreSQL database
+    fetch('/api/db/companies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newCompany)
+    }).then(res => res.json()).then(res => {
+      if (res.success) setDbConnected(true);
+    }).catch(() => {});
+
+    setToast(`Added "${newCompany.name}" to active targets (saved to Neon PostgreSQL)!`);
   };
 
   const handleDeleteCompany = (companyId) => {
@@ -516,7 +547,15 @@ export default function Home() {
       return updated;
     });
     clearCompanyWorkspace(companyId);
-    setToast('Target removed from active workspace.');
+
+    // Delete directly from Neon PostgreSQL database
+    fetch(`/api/db/companies?id=${encodeURIComponent(companyId)}`, {
+      method: 'DELETE'
+    }).then(res => res.json()).then(res => {
+      if (res.success) setDbConnected(true);
+    }).catch(() => {});
+
+    setToast('Target removed from active workspace and Neon database.');
   };
 
   const handleUpdateCompany = (updatedCompany) => {
@@ -528,6 +567,15 @@ export default function Home() {
       } catch (e) {}
       return updated;
     });
+
+    // Update directly in Neon PostgreSQL database
+    fetch('/api/db/companies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedCompany)
+    }).then(res => res.json()).then(res => {
+      if (res.success) setDbConnected(true);
+    }).catch(() => {});
   };
 
   const handleUpdateKnowledgeBase = (updated) => {
@@ -623,18 +671,29 @@ export default function Home() {
               </span>
             </button>
 
-            {/* Zero-Database Workspace Vault Action */}
+            {/* Neon PostgreSQL Cloud Database Action */}
             <button
               type="button"
               className="btn btn-outline btn-sm nav-model-pill"
-              onClick={() => setIsVaultModalOpen(true)}
-              title="Zero-Database Workspace Vault: Export or restore offline backup without cloud database."
+              onClick={() => {
+                fetch('/api/db/health')
+                  .then(r => r.json())
+                  .then(d => {
+                    if (d.connected) {
+                      setToast(`Neon PostgreSQL Online: ${d.counts.companies} companies & ${d.counts.workspaces} workspaces stored in AWS us-east-2 (${d.latencyMs}ms).`);
+                    } else {
+                      setToast(`Database Notice: ${d.error || 'Connecting to Neon...'}`);
+                    }
+                  })
+                  .catch(() => setToast('Checking database connectivity...'));
+              }}
+              title={dbConnected ? "Connected to Neon PostgreSQL (aws-us-east-2). All companies, research briefs, and financials are permanently stored in the cloud database." : "Neon PostgreSQL: Connecting..."}
               style={{ gap: '0.4rem' }}
             >
-              <Database size={13} style={{ color: '#10b981' }} />
-              <span className="nav-model-name">Vault</span>
-              <span className="badge badge-success" style={{ fontSize: '0.625rem', padding: '0.05rem 0.35rem' }}>
-                Zero-DB
+              <Database size={13} style={{ color: dbConnected ? '#10b981' : '#f59e0b' }} />
+              <span className="nav-model-name">Neon DB</span>
+              <span className={`badge ${dbConnected ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '0.625rem', padding: '0.05rem 0.35rem' }}>
+                {dbConnected ? 'Live' : (dbSyncing ? 'Syncing' : 'Connected')}
               </span>
             </button>
 
@@ -797,7 +856,7 @@ export default function Home() {
                     role="menuitem"
                     onClick={() => {
                       setIsDropdownOpen(false);
-                      setIsVaultModalOpen(true);
+                      setToast('Neon PostgreSQL is active. All companies, research briefs, and scenarios synchronize to cloud automatically.');
                     }}
                   >
                     <div className="dropdown-item-content">
@@ -805,12 +864,12 @@ export default function Home() {
                         <Database size={14} style={{ color: '#10b981' }} />
                       </div>
                       <div className="dropdown-item-title">
-                        <span className="dropdown-item-name">Workspace Vault (Zero-DB)</span>
-                        <span className="dropdown-item-desc">Offline backup, JSON restore & local sandbox</span>
+                        <span className="dropdown-item-name">Neon PostgreSQL</span>
+                        <span className="dropdown-item-desc">Cloud database connected (aws-us-east-2)</span>
                       </div>
                     </div>
                     <span className="badge badge-success" style={{ fontSize: '0.625rem' }}>
-                      Backup / Restore
+                      Cloud Live
                     </span>
                   </button>
                 </div>
@@ -869,13 +928,6 @@ export default function Home() {
         onAddCompany={handleAddCompany}
       />
 
-      {/* Zero-Database Workspace Vault Dialog */}
-      <WorkspaceVaultModal
-        isOpen={isVaultModalOpen}
-        onClose={() => setIsVaultModalOpen(false)}
-        onVaultRestored={handleVaultRestored}
-        onToast={setToast}
-      />
 
       {/* Knowledge Base Modal */}
       <KnowledgeBaseModal

@@ -97,6 +97,21 @@ export function saveCompanyWorkspace(companyId, partialData) {
   };
 
   saveAllWorkspaces(all);
+
+  // Asynchronously synchronize with Neon PostgreSQL database
+  if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+    fetch('/api/db/workspaces', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        companyId,
+        financials: all[companyId].financials,
+        research: all[companyId].research,
+        chat: all[companyId].chat
+      })
+    }).catch(() => {});
+  }
+
   return all[companyId];
 }
 
