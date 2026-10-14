@@ -1424,8 +1424,8 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
             {/* Step 1 Target Company Card */}
             <div className="card">
               <div className="card-header">
-                <div className="card-header-row">
-                  <div>
+                <div className="card-header-row card-header-row-step1">
+                  <div className="card-header-text">
                     <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'hsl(var(--muted-foreground))' }}>
                       STEP 01 · TARGET PROFILE & SCENARIOS
                     </span>
@@ -1433,20 +1433,14 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                     <p className="card-description">Fine-tune target metrics or run instant sensitivity scenarios. All changes auto-save per target.</p>
                   </div>
 
-                  <div className="card-header-actions-inline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <div className="card-header-actions-inline">
                     <span
-                      className="badge badge-outline"
+                      className="badge badge-outline auto-save-badge"
                       style={{
-                        fontSize: '0.6875rem',
-                        padding: '0.2rem 0.55rem',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.3rem',
                         color: saveIndicator === 'saving' ? 'hsl(var(--warning))' : 'hsl(var(--emerald))',
-                        borderColor: saveIndicator === 'saving' ? 'hsl(var(--warning) / 0.4)' : 'hsl(var(--emerald) / 0.4)',
-                        transition: 'all 0.2s ease'
+                        borderColor: saveIndicator === 'saving' ? 'hsl(var(--warning) / 0.4)' : 'hsl(var(--emerald) / 0.4)'
                       }}
-                      title="All changes in this section auto-save immediately to this company's dedicated workspace in local storage."
+                      title="All changes in this section auto-save immediately to this company's dedicated workspace in local storage and Neon PostgreSQL."
                     >
                       {saveIndicator === 'saving' ? (
                         <>● Auto-saving...</>
@@ -1456,17 +1450,16 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                     </span>
                     <button
                       type="button"
-                      className="btn btn-outline btn-sm"
+                      className="btn btn-outline btn-sm action-btn"
                       onClick={handleSaveBaseline}
                       title="Lock current numbers as permanent company baseline profile"
-                      style={{ gap: '0.35rem' }}
                     >
                       <Save size={13} />
                       <span>Save Baseline</span>
                     </button>
                     <button
                       type="button"
-                      className="btn btn-outline btn-sm"
+                      className="btn btn-outline btn-sm action-btn"
                       onClick={onOpenCustomModal}
                     >
                       <Plus size={13} />
@@ -1827,24 +1820,24 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
 
           <div className="card">
             <div className="card-header">
-              <div className="card-header-row">
-                <div>
+              <div className="card-header-row card-header-row-step1">
+                <div className="card-header-text">
                   <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'hsl(var(--muted-foreground))' }}>
                     STEP 02 · PRECEDENT TRANSACTIONS
                   </span>
                   <h2 className="card-title">M&A Deal Comparables & Multiples Benchmark</h2>
                   <p className="card-description">Toggle transactions to calibrate the benchmark multiple corridor for {companyName}.</p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div className="card-header-actions-inline">
                   <button
                     type="button"
-                    className="btn btn-outline btn-sm"
+                    className="btn btn-outline btn-sm action-btn"
                     onClick={() => setIsAddDealOpen(true)}
                   >
                     <Plus size={13} />
                     <span>Add Custom Deal</span>
                   </button>
-                  <span className="badge badge-secondary">{selectedDeals.length} of {activeDeals.length} Selected</span>
+                  <span className="badge badge-secondary auto-save-badge">{selectedDeals.length} of {activeDeals.length} Selected</span>
                 </div>
               </div>
 
