@@ -88,41 +88,48 @@ export default function AgentMonitor({ status = 'idle', logs = [], kbCount = 0, 
       <div className="agent-monitor-header">
         <div className="agent-monitor-title">
           <span className="agent-pulse-icon">
-            {isRunning ? <Cpu className="spin-slow" size={15} /> : <ShieldCheck size={15} />}
+            {isRunning ? <Cpu className="spin-slow" size={13} /> : <ShieldCheck size={13} />}
           </span>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div className="agent-monitor-title-content">
+            <div className="agent-monitor-heading-row">
               <strong>Autonomous Multi-Agent Research Pipeline</strong>
+              <span className="agent-meta-divider">·</span>
+              <span className="agent-meta-text">5 Specialist Agents</span>
+              {kbCount > 0 && <span className="agent-meta-text">· {kbCount} KB Grounding Docs</span>}
+              {skillsCount > 0 && <span className="agent-meta-text">· {skillsCount} Active Skills</span>}
               {isRunning && (
-                <span className="agent-elapsed-tag">
-                  <Clock size={11} /> {elapsedSeconds}s elapsed
+                <span className="badge badge-warning badge-xs" style={{ marginLeft: '0.25rem' }}>
+                  Stage 0{completedStagesCount + 1} Processing...
+                </span>
+              )}
+              {isDone && (
+                <span className="badge badge-success badge-xs" style={{ marginLeft: '0.25rem' }}>
+                  <CheckCircle2 size={9} /> 5 Agents Verified
                 </span>
               )}
             </div>
-            <small>
-              <span>5 Specialist Agents</span>
-              {kbCount > 0 && <span> · {kbCount} KB Grounding Docs</span>}
-              {skillsCount > 0 && <span> · {skillsCount} Active Skills</span>}
-              {isRunning && <span className="badge badge-warning" style={{ marginLeft: '0.375rem' }}>Stage 0{completedStagesCount + 1} Processing...</span>}
-              {isDone && <span className="badge badge-success" style={{ marginLeft: '0.375rem' }}><CheckCircle2 size={11} /> All 5 Agents Verified</span>}
-            </small>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
+          {isRunning && (
+            <span className="agent-elapsed-tag">
+              <Clock size={10} /> {elapsedSeconds}s
+            </span>
+          )}
           <button
             type="button"
-            className="btn btn-outline btn-sm"
+            className="btn btn-outline btn-xs"
             onClick={() => setShowLogs(!showLogs)}
             title="Toggle Agent Activity Logs"
           >
-            <Terminal size={13} />
+            <Terminal size={11} />
             <span>Agent Telemetry ({logs.length})</span>
-            {showLogs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            {showLogs ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
           </button>
         </div>
       </div>
 
-      {/* 5-Stage Agent Progress Pipeline */}
+      {/* 5-Stage Agent Progress Pipeline - Ultra-Compact */}
       <div className="agent-pipeline-grid">
         {stages.map((stage, idx) => {
           const Icon = stage.icon;
@@ -130,20 +137,26 @@ export default function AgentMonitor({ status = 'idle', logs = [], kbCount = 0, 
 
           return (
             <div key={stage.id} className={`agent-pipeline-card state-${stageState}`}>
-              <div className="agent-card-top">
-                <span className="agent-icon-wrapper">
-                  <Icon size={13} />
-                </span>
-                <span className="agent-stage-number">0{stage.id}</span>
-              </div>
-              <div className="agent-card-body">
-                <strong>{stage.name}</strong>
-                <p>{stage.desc}</p>
-              </div>
-              <div className="agent-card-footer-pill">
-                {stageState === 'done' && <span className="badge badge-success"><CheckCircle2 size={10} /> Verified</span>}
-                {stageState === 'running' && <span className="badge badge-warning"><Sparkles size={10} className="spin-slow" /> Analyzing</span>}
-                {stageState === 'pending' && <span className="badge badge-secondary">Standby</span>}
+              <div className="agent-card-row-main">
+                <div className="agent-card-identity">
+                  <span className="agent-icon-wrapper">
+                    <Icon size={12} />
+                  </span>
+                  <div className="agent-card-text">
+                    <div className="agent-card-title-line">
+                      <strong title={stage.name}>{stage.name}</strong>
+                    </div>
+                    <p title={stage.desc}>{stage.desc}</p>
+                  </div>
+                </div>
+                <div className="agent-card-end">
+                  <span className="agent-stage-number">0{stage.id}</span>
+                  <div className="agent-card-pill">
+                    {stageState === 'done' && <span className="badge badge-success badge-xs"><CheckCircle2 size={8} /> Verified</span>}
+                    {stageState === 'running' && <span className="badge badge-warning badge-xs"><Sparkles size={8} className="spin-slow" /> Active</span>}
+                    {stageState === 'pending' && <span className="badge badge-secondary badge-xs">Standby</span>}
+                  </div>
+                </div>
               </div>
             </div>
           );

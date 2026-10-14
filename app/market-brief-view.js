@@ -211,7 +211,7 @@ function RuleOf40Gauge({ growth = 30, margin = 18 }) {
   );
 }
 
-// Valuation Range "Football Field" Visualizer
+// Valuation Range "Football Field" Visualizer & Equity Bridge
 function ValuationFootballField({
   revenue = 25,
   lowMultiple = 3.2,
@@ -223,54 +223,72 @@ function ValuationFootballField({
   const centralEV = revenue * referenceMultiple;
   const highEV = revenue * highMultiple;
 
-  const lowEquity = lowEV - netDebt;
   const centralEquity = centralEV - netDebt;
-  const highEquity = highEV - netDebt;
 
   return (
     <div className="football-field-card">
-      <div className="football-field-header">
-        <div className="football-title-wrap">
-          <BarChart3 size={15} />
-          <strong>Precedent Multiple Valuation Spread</strong>
+      {/* 1. Precedent Multiple Valuation Spread Range */}
+      <div className="valuation-spread-block">
+        <div className="spread-header-row">
+          <span className="spread-section-title">Precedent Multiple Spread</span>
+          <span className="badge badge-secondary badge-xs">EV / LTM Revenue</span>
         </div>
-        <span className="badge badge-outline">Enterprise vs Equity Corridor</span>
+
+        {/* 3 Value Columns positioned cleanly above the bar */}
+        <div className="spread-values-grid">
+          <div className="spread-val-col val-low">
+            <span className="spread-label">Low ({lowMultiple.toFixed(1)}x)</span>
+            <strong className="spread-num">{money(lowEV)}</strong>
+          </div>
+          <div className="spread-val-col val-median highlight">
+            <span className="spread-label">Median Benchmark ({referenceMultiple.toFixed(1)}x)</span>
+            <strong className="spread-num text-emerald-500">{money(centralEV)}</strong>
+          </div>
+          <div className="spread-val-col val-high">
+            <span className="spread-label">High ({highMultiple.toFixed(1)}x)</span>
+            <strong className="spread-num">{money(highEV)}</strong>
+          </div>
+        </div>
+
+        {/* Visual Range Track with Pins */}
+        <div className="spread-track-wrap">
+          <div className="spread-track-bar">
+            <div className="spread-pin pin-low" style={{ left: '15%' }} title={`Low: ${money(lowEV)} (${lowMultiple.toFixed(1)}x)`} />
+            <div className="spread-pin pin-median" style={{ left: '50%' }} title={`Median: ${money(centralEV)} (${referenceMultiple.toFixed(1)}x)`} />
+            <div className="spread-pin pin-high" style={{ left: '85%' }} title={`High: ${money(highEV)} (${highMultiple.toFixed(1)}x)`} />
+          </div>
+        </div>
       </div>
 
-      <div className="corridor-visual-track">
-        <div className="corridor-gradient-bar">
-          <div className="corridor-marker marker-low" style={{ left: '15%' }}>
-            <span className="marker-pin" />
-            <span className="marker-label">Low ({lowMultiple.toFixed(1)}x)</span>
-            <strong className="marker-val">{money(lowEV)}</strong>
+      {/* 2. Enterprise to Equity Value Bridge (Clear Math Formula) */}
+      <div className="equity-bridge-block">
+        <div className="bridge-header-row">
+          <span className="spread-section-title">Enterprise to Equity Bridge</span>
+          <span className="text-muted-foreground" style={{ fontSize: '0.6875rem' }}>Median Reference</span>
+        </div>
+
+        <div className="bridge-equation-grid">
+          <div className="bridge-calc-card">
+            <span className="bridge-calc-label">Enterprise Value</span>
+            <strong className="bridge-calc-value">{money(centralEV)}</strong>
+            <small className="bridge-calc-sub">{referenceMultiple.toFixed(1)}x EV</small>
           </div>
 
-          <div className="corridor-marker marker-central" style={{ left: '50%' }}>
-            <span className="marker-pin pin-central" />
-            <span className="marker-label">Median ({referenceMultiple.toFixed(1)}x)</span>
-            <strong className="marker-val val-central">{money(centralEV)}</strong>
+          <div className="bridge-operator">−</div>
+
+          <div className="bridge-calc-card bridge-debt-card">
+            <span className="bridge-calc-label">Net Debt</span>
+            <strong className="bridge-calc-value">{money(netDebt)}</strong>
+            <small className="bridge-calc-sub">Deduction</small>
           </div>
 
-          <div className="corridor-marker marker-high" style={{ left: '85%' }}>
-            <span className="marker-pin" />
-            <span className="marker-label">High ({highMultiple.toFixed(1)}x)</span>
-            <strong className="marker-val">{money(highEV)}</strong>
-          </div>
-        </div>
-      </div>
+          <div className="bridge-operator">=</div>
 
-      <div className="bridge-pill-row">
-        <div className="bridge-pill">
-          <span>Enterprise Value (Median):</span>
-          <strong>{money(centralEV)}</strong>
-        </div>
-        <div className="bridge-pill bridge-debt">
-          <span>Less Net Debt:</span>
-          <strong>− {money(netDebt)}</strong>
-        </div>
-        <div className="bridge-pill bridge-equity">
-          <span>Indicative Equity Value:</span>
-          <strong className="text-emerald-500">{money(centralEquity)}</strong>
+          <div className="bridge-calc-card bridge-equity-card">
+            <span className="bridge-calc-label">Indicative Equity Value</span>
+            <strong className="bridge-calc-value text-emerald-500">{money(centralEquity)}</strong>
+            <small className="bridge-calc-sub text-emerald-600">Net to Seller</small>
+          </div>
         </div>
       </div>
     </div>
@@ -353,6 +371,11 @@ export default function MarketBriefView({
   // Governance & Review Gate
   const [reviewed, setReviewed] = useState(false);
   const [reviewChecks, setReviewChecks] = useState({ sources: false, assumptions: false, buyerFit: false });
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Sector-based color accent generator for avatars
   const getSectorGradient = (sec = '') => {
@@ -904,22 +927,6 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
       {/* Page Header (shadcn style) */}
       <div className="page-header">
         <div className="page-header-title">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-            <span className="badge badge-secondary">
-              <Sparkles size={11} /> Deal Intelligence Agent
-            </span>
-            <span className="badge badge-outline">Institutional v2.0</span>
-            {seller?.name && (
-              <span className="badge badge-default" style={{ background: 'hsl(var(--primary))' }}>
-                Active: {seller.name}
-              </span>
-            )}
-            {generatedReportMarkdown && (
-              <span className="badge badge-success" style={{ gap: '0.25rem' }}>
-                <CheckCircle2 size={10} /> Research Retained
-              </span>
-            )}
-          </div>
           <h1>Company Market Brief & Valuation Engine</h1>
           <p>
             Autonomous AI agentic workflow for exhaustive company intelligence, precedent deal benchmarking, and institutional M&A valuation reports.
@@ -953,9 +960,9 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
         <div className="presets-scroll-flex">
           {sellers.map((item) => {
             const isSelected = item.id === sellerId;
-            const ws = storedWorkspaces[item.id];
-            const hasReport = Boolean(ws?.research?.generatedReportMarkdown);
-            const chatCount = ws?.chat?.messages?.length || 0;
+            const ws = isMounted ? storedWorkspaces[item.id] : null;
+            const hasReport = isMounted && Boolean(ws?.research?.generatedReportMarkdown);
+            const chatCount = isMounted ? (ws?.chat?.messages?.length || 0) : 0;
 
             return (
               <button
