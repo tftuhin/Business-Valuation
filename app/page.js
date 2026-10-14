@@ -3,9 +3,11 @@
 import { useEffect, useState, useRef } from 'react';
 import {
   CheckCircle2, Moon, Sparkles, Sun, X, Building2, KeyRound,
-  BookOpen, Zap, LayoutTemplate, ChevronDown, SlidersHorizontal
+  BookOpen, Zap, LayoutTemplate, ChevronDown, SlidersHorizontal,
+  MessageSquare, LayoutGrid
 } from 'lucide-react';
 import MarketBriefView from './market-brief-view';
+import DealChatWorkspace from './deal-chat-workspace';
 import ApiKeyModal from './api-key-modal';
 import CustomCompanyModal from './custom-company-modal';
 import KnowledgeBaseModal from './knowledge-base-modal';
@@ -239,6 +241,9 @@ export default function Home() {
 
   // Active workflow tab state (shared with navbar and MarketBriefView)
   const [activeTab, setActiveTab] = useState('analysis');
+
+  // Interface view mode: 'chat' (new conversational sessions default) or 'classic' (dashboard cards)
+  const [viewMode, setViewMode] = useState('chat');
 
   // Global keyboard shortcuts (Cmd/Ctrl + 1-4 for tabs, Cmd/Ctrl + K for tools)
   useEffect(() => {
@@ -478,6 +483,55 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Interface Mode Switcher: Chat Sessions vs Classic Dashboard */}
+          <div
+            className="nav-view-mode-toggle"
+            style={{
+              display: 'inline-flex',
+              padding: '0.15rem',
+              background: 'hsl(var(--muted))',
+              borderRadius: 'calc(var(--radius) - 2px)',
+              border: '1px solid hsl(var(--border))',
+              gap: '0.2rem'
+            }}
+          >
+            <button
+              type="button"
+              className={`btn btn-xs ${viewMode === 'chat' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{
+                gap: '0.35rem',
+                height: '1.75rem',
+                padding: '0 0.65rem',
+                borderRadius: 'calc(var(--radius) - 4px)',
+                fontWeight: viewMode === 'chat' ? 600 : 400
+              }}
+              onClick={() => setViewMode('chat')}
+              title="Conversational AI Chat Workspace with Target Sessions & Living Canvas"
+            >
+              <MessageSquare size={12} />
+              <span>Chat Workspace</span>
+              <span className="badge badge-success" style={{ fontSize: '0.5625rem', padding: '0.05rem 0.3rem' }}>
+                New
+              </span>
+            </button>
+            <button
+              type="button"
+              className={`btn btn-xs ${viewMode === 'classic' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{
+                gap: '0.35rem',
+                height: '1.75rem',
+                padding: '0 0.65rem',
+                borderRadius: 'calc(var(--radius) - 4px)',
+                fontWeight: viewMode === 'classic' ? 600 : 400
+              }}
+              onClick={() => setViewMode('classic')}
+              title="Classic Card-Based Dashboard"
+            >
+              <LayoutGrid size={12} />
+              <span>Classic Cards</span>
+            </button>
+          </div>
+
 
           <div className="shadcn-nav-actions">
             {/* AI Provider Status Chip */}
@@ -668,25 +722,44 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Workflow View */}
-      <MarketBriefView
-        sellers={companies}
-        onToast={setToast}
-        onOpenCustomModal={() => setIsCustomModalOpen(true)}
-        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
-        apiKey={activeKey}
-        aiSettings={aiSettings}
-        knowledgeBase={knowledgeBase}
-        skills={skills}
-        reportLayouts={reportLayouts}
-        activeLayoutId={activeLayoutId}
-        onSelectLayout={handleSelectLayout}
-        onOpenKnowledgeBaseModal={() => setIsKbModalOpen(true)}
-        onOpenSkillsModal={() => setIsSkillsModalOpen(true)}
-        onOpenLayoutsModal={() => setIsLayoutsModalOpen(true)}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-      />
+      {/* Main Interface: Chat-Centric Workspace or Classic Dashboard */}
+      {viewMode === 'chat' ? (
+        <DealChatWorkspace
+          initialCompanies={companies}
+          apiKey={activeKey}
+          aiSettings={aiSettings}
+          knowledgeBase={knowledgeBase}
+          skills={skills}
+          reportLayouts={reportLayouts}
+          activeLayoutId={activeLayoutId}
+          onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+          onOpenKnowledgeBaseModal={() => setIsKbModalOpen(true)}
+          onOpenSkillsModal={() => setIsSkillsModalOpen(true)}
+          onOpenCustomModal={() => setIsCustomModalOpen(true)}
+          isDarkMode={isDarkMode}
+          onToggleTheme={toggleTheme}
+          onToast={setToast}
+        />
+      ) : (
+        <MarketBriefView
+          sellers={companies}
+          onToast={setToast}
+          onOpenCustomModal={() => setIsCustomModalOpen(true)}
+          onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+          apiKey={activeKey}
+          aiSettings={aiSettings}
+          knowledgeBase={knowledgeBase}
+          skills={skills}
+          reportLayouts={reportLayouts}
+          activeLayoutId={activeLayoutId}
+          onSelectLayout={handleSelectLayout}
+          onOpenKnowledgeBaseModal={() => setIsKbModalOpen(true)}
+          onOpenSkillsModal={() => setIsSkillsModalOpen(true)}
+          onOpenLayoutsModal={() => setIsLayoutsModalOpen(true)}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
+      )}
 
       {/* Settings Dialog */}
       <ApiKeyModal
