@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   ArrowDownRight, ArrowUpRight, BadgeCheck, BarChart3, Check, CheckCircle2,
   ChevronDown, CircleAlert, Copy, Download, ExternalLink, FileText, Globe,
-  Info, KeyRound, LockKeyhole, Plus, Printer, RefreshCw, Search,
+  Info, KeyRound, LockKeyhole, Plus, Printer, RefreshCw, Save, Search,
   ShieldCheck, Sparkles, TrendingUp, UsersRound, MessageSquare, BookOpen,
   Zap, LayoutTemplate, ArrowRight, Minus, ChevronsUpDown, Filter,
   Maximize2, Minimize2, ZoomIn, ZoomOut, CheckCheck, Trash2, Sliders, Layers,
@@ -454,6 +454,8 @@ export default function MarketBriefView({
   onToast = () => {},
   onOpenCustomModal = () => {},
   onOpenApiKeyModal = () => {},
+  onDeleteCompany = () => {},
+  onUpdateCompany = () => {},
   apiKey = '',
   aiSettings = null,
   serverConfigured = {},
@@ -524,6 +526,11 @@ export default function MarketBriefView({
   const [chatMessages, setChatMessages] = useState(EMPTY_CHAT_MESSAGES);
   const [workspacesRevision, setWorkspacesRevision] = useState(0);
 
+  // Auto-Save State & Sector Editing
+  const [saveIndicator, setSaveIndicator] = useState('saved');
+  const saveTimeoutRef = useRef(null);
+  const [sectorInput, setSectorInput] = useState(sellers[0]?.sector || 'Enterprise Software');
+
   // Report Reading Experience
   const [reportZoom, setReportZoom] = useState('normal'); // 'normal' | 'large'
   const [isPresentationMode, setIsPresentationMode] = useState(false);
@@ -558,6 +565,7 @@ export default function MarketBriefView({
     setRetention(ws.financials?.retention ?? parsePercent(seller.retention));
     setNetDebt(ws.financials?.netDebt ?? (seller.netDebt ?? 5));
     setActiveScenario(ws.financials?.activeScenario || 'base');
+    setSectorInput(seller.sector || 'Enterprise Software');
 
     // Restore research work
     setAgentStatus(ws.research?.agentStatus || 'idle');
@@ -635,6 +643,7 @@ export default function MarketBriefView({
 
   // Persist financial metric adjustments
   const persistFinancials = (partialFin) => {
+    setSaveIndicator('saving');
     saveCompanyWorkspace(sellerId, {
       financials: {
         revenue,
@@ -647,6 +656,34 @@ export default function MarketBriefView({
       }
     });
     setWorkspacesRevision(v => v + 1);
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      setSaveIndicator('saved');
+    }, 400);
+  };
+
+  const handleSaveBaseline = () => {
+    persistFinancials({
+      revenue,
+      growth,
+      margin,
+      retention,
+      netDebt,
+      activeScenario
+    });
+    if (onUpdateCompany && seller) {
+      onUpdateCompany({
+        ...seller,
+        sector: sectorInput || seller.sector,
+        revenue,
+        growth,
+        margin,
+        retention,
+        netDebt
+      });
+    }
+    setSaveIndicator('saved');
+    onToast(`✓ Baseline metrics saved for "${seller?.name || 'Target Asset'}" ($${revenue}M Rev, ${growth}% Growth, ${margin}% Margin)!`);
   };
 
   // Scenario toggle handler
@@ -1352,7 +1389,37 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                     <p className="card-description">Fine-tune target metrics or run instant sensitivity scenarios. All changes auto-save per target.</p>
                   </div>
 
-                  <div className="card-header-actions-inline">
+                  <div className="card-header-actions-inline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <span
+                      className="badge badge-outline"
+                      style={{
+                        fontSize: '0.6875rem',
+                        padding: '0.2rem 0.55rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        color: saveIndicator === 'saving' ? 'hsl(var(--warning))' : 'hsl(var(--emerald))',
+                        borderColor: saveIndicator === 'saving' ? 'hsl(var(--warning) / 0.4)' : 'hsl(var(--emerald) / 0.4)',
+                        transition: 'all 0.2s ease'
+                      }}
+                      title="All changes in this section auto-save immediately to this company's dedicated workspace in local storage."
+                    >
+                      {saveIndicator === 'saving' ? (
+                        <>● Auto-saving...</>
+                      ) : (
+                        <><Check size={11} /> Auto-Saved</>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={handleSaveBaseline}
+                      title="Lock current numbers as permanent company baseline profile"
+                      style={{ gap: '0.35rem' }}
+                    >
+                      <Save size={13} />
+                      <span>Save Baseline</span>
+                    </button>
                     <button
                       type="button"
                       className="btn btn-outline btn-sm"
@@ -1440,9 +1507,27 @@ Valuation ranges are derived via precedent comparable transaction multiples cali
                   <div className="metric-label-row">
                     <label className="form-label">Sector / Vertical</label>
                   </div>
-                  <div className="sector-display-badge">
-                    {sector}
-                  </div>
+                  {seller?.isCustom ? (
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={sectorInput}
+                      onChange={e => {
+                        const nextSec = e.target.value;
+                        setSectorInput(nextSec);
+                        setReviewed(false);
+                        if (onUpdateCompany && seller) {
+                          onUpdateCompany({ ...seller, sector: nextSec });
+                        }
+                      }}
+                      placeholder="e.g. web & Application development"
+                      style={{ fontSize: '0.8125rem', height: '2.25rem', width: '100%' }}
+                    />
+                  ) : (
+                    <div className="sector-display-badge">
+                      {sector}
+                    </div>
+                  )}
                   <span className="form-hint">Target industry benchmark</span>
                 </div>
 

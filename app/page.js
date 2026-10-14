@@ -519,6 +519,17 @@ export default function Home() {
     setToast('Target removed from active workspace.');
   };
 
+  const handleUpdateCompany = (updatedCompany) => {
+    setCompanies(prev => {
+      const updated = prev.map(c => c.id === updatedCompany.id ? { ...c, ...updatedCompany } : c);
+      try {
+        const customOnly = updated.filter(c => c.isCustom);
+        localStorage.setItem('dealbrief_custom_companies_v1', JSON.stringify(customOnly));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
   const handleUpdateKnowledgeBase = (updated) => {
     setKnowledgeBase(updated);
     if (typeof window !== 'undefined') {
@@ -826,6 +837,7 @@ export default function Home() {
         onOpenCustomModal={() => setIsCustomModalOpen(true)}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
         onDeleteCompany={handleDeleteCompany}
+        onUpdateCompany={handleUpdateCompany}
         apiKey={activeKey}
         aiSettings={aiSettings}
         serverConfigured={serverConfigured}
