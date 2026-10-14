@@ -7,7 +7,8 @@ import {
   FileText, ChevronRight, ChevronLeft, Plus, Trash2, Search,
   Sliders, ExternalLink, Printer, Download, BookOpen, Zap,
   KeyRound, Sun, Moon, Info, CheckCircle2, AlertCircle, Clock,
-  Layers, Users, Share2, Compass, Cpu, Maximize2, Minimize2
+  Layers, Users, Share2, Compass, Cpu, Maximize2, Minimize2,
+  PanelLeft, PanelLeftClose, X
 } from 'lucide-react';
 import { marked } from 'marked';
 import {
@@ -36,10 +37,29 @@ export default function DealChatWorkspace({
   const [companies, setCompanies] = useState(initialCompanies);
   const [activeCompanyId, setActiveCompanyId] = useState(initialCompanies[0]?.id || '');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isCanvasOpen, setIsCanvasOpen] = useState(true);
   const [activeCanvasTab, setActiveCanvasTab] = useState('corridor'); // 'brief' | 'corridor' | 'comps' | 'financials'
   const [workspacesRev, setWorkspacesRev] = useState(0);
   const [isCopied, setIsCopied] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1440);
+
+  // Responsive handling: auto-collapse panels on smaller screens
+  useEffect(() => {
+    function handleResize() {
+      const w = window.innerWidth;
+      setWindowWidth(w);
+      if (w < 1100) {
+        setIsCanvasOpen(false);
+      }
+      if (w < 840) {
+        setIsSidebarOpen(false);
+      }
+    }
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Active Company Object
   const activeCompany = useMemo(() => {
@@ -330,34 +350,60 @@ I have synthesized market intelligence, verified precedent transactions, and gen
 
   return (
     <div className="chat-workspace-shell">
+      {/* Mobile Backdrop for Sidebar Drawer */}
+      {isSidebarOpen && windowWidth <= 840 && (
+        <div
+          className="workspace-backdrop"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-label="Close sidebar"
+        />
+      )}
+
+      {/* Backdrop for Living Canvas Drawer on smaller screens */}
+      {isCanvasOpen && windowWidth <= 1100 && (
+        <div
+          className="workspace-backdrop"
+          onClick={() => setIsCanvasOpen(false)}
+          aria-label="Close canvas"
+        />
+      )}
+
       {/* ========================================================
           COLUMN 1: TARGET SESSIONS SIDEBAR
           ======================================================== */}
-      <aside className="chat-workspace-sidebar">
-        {/* Brand / Logo Area */}
-        <div className="sidebar-brand-row">
-          <div className="brand-badge-wrap">
-            <div className="brand-icon-box">
-              <Sparkles size={16} />
-            </div>
-            <div>
-              <span className="brand-title">DealBridge AI</span>
-              <span className="brand-subtitle">Intelligence Workspace</span>
-            </div>
+      <aside className={`chat-workspace-sidebar ${isSidebarOpen ? 'is-open' : 'is-collapsed'}`}>
+        {/* Sidebar Header Bar */}
+        <div className="sidebar-top-bar">
+          <div className="sidebar-brand-group">
+            <Building2 size={15} style={{ color: 'hsl(var(--emerald))' }} />
+            <span className="sidebar-brand-title">Diligence Targets</span>
+            <span className="badge badge-secondary badge-xs">
+              {filteredCompanies.length}
+            </span>
           </div>
-          <span className="badge badge-outline" style={{ fontSize: '0.625rem' }}>Chat-First</span>
-        </div>
 
-        {/* Primary Action: New Company Research */}
-        <div className="sidebar-action-wrap">
-          <button
-            type="button"
-            className="btn btn-primary sidebar-new-btn"
-            onClick={onOpenCustomModal}
-          >
-            <Plus size={15} />
-            <span>New Target Research</span>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-xs"
+              onClick={onOpenCustomModal}
+              title="Add New Target Research Session"
+            >
+              <Plus size={12} />
+              <span>New</span>
+            </button>
+
+            {windowWidth <= 840 && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs btn-icon"
+                onClick={() => setIsSidebarOpen(false)}
+                title="Close Sidebar"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Search Input */}
@@ -366,7 +412,7 @@ I have synthesized market intelligence, verified precedent transactions, and gen
           <input
             type="text"
             className="sidebar-search-input"
-            placeholder="Filter target sessions..."
+            placeholder="Search company sessions..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -374,10 +420,6 @@ I have synthesized market intelligence, verified precedent transactions, and gen
 
         {/* Target Sessions List */}
         <div className="sidebar-sessions-list">
-          <div className="sidebar-section-label">
-            <span>Diligence Sessions ({filteredCompanies.length})</span>
-          </div>
-
           {filteredCompanies.map(comp => {
             const isSelected = comp.id === activeCompanyId;
             const ws = storedAll[comp.id];
@@ -389,7 +431,10 @@ I have synthesized market intelligence, verified precedent transactions, and gen
                 key={comp.id}
                 type="button"
                 className={`sidebar-session-item ${isSelected ? 'active' : ''}`}
-                onClick={() => setActiveCompanyId(comp.id)}
+                onClick={() => {
+                  setActiveCompanyId(comp.id);
+                  if (windowWidth <= 840) setIsSidebarOpen(false);
+                }}
               >
                 <div
                   className="session-avatar"
@@ -418,47 +463,11 @@ I have synthesized market intelligence, verified precedent transactions, and gen
           })}
         </div>
 
-        {/* Sidebar Footer Controls */}
+        {/* Sidebar Footer Status */}
         <div className="sidebar-footer">
-          <div className="sidebar-footer-tools">
-            <button
-              type="button"
-              className="btn btn-outline btn-xs"
-              onClick={onOpenApiKeyModal}
-              title="Configure AI Provider & API Keys"
-            >
-              <KeyRound size={12} />
-              <span>{aiSettings?.activeProvider ? aiSettings.activeProvider.toUpperCase() : 'Gemini'}</span>
-            </button>
-
-            <button
-              type="button"
-              className="btn btn-outline btn-xs"
-              onClick={onOpenKnowledgeBaseModal}
-              title="Manage Grounding Knowledge Base"
-            >
-              <BookOpen size={12} />
-              <span>KB ({(knowledgeBase || []).filter(k => k.enabled).length})</span>
-            </button>
-
-            <button
-              type="button"
-              className="btn btn-outline btn-xs"
-              onClick={onOpenSkillsModal}
-              title="Agent Analysis Skills"
-            >
-              <Zap size={12} />
-              <span>Skills ({(skills || []).filter(s => s.enabled).length})</span>
-            </button>
-
-            <button
-              type="button"
-              className="btn btn-outline btn-xs btn-icon"
-              onClick={onToggleTheme}
-              title="Toggle Dark / Light Theme"
-            >
-              {isDarkMode ? <Sun size={12} /> : <Moon size={12} />}
-            </button>
+          <div className="sidebar-status-note">
+            <span className="status-dot-pulse" style={{ backgroundColor: '#10b981' }} />
+            <span>Target Context Encrypted & Saved</span>
           </div>
         </div>
       </aside>
@@ -467,37 +476,46 @@ I have synthesized market intelligence, verified precedent transactions, and gen
           COLUMN 2: CONVERSATIONAL DILIGENCE AGENT
           ======================================================== */}
       <main className="chat-workspace-center">
-        {/* Active Target Header Bar */}
+        {/* Compact, Single-Row Active Target Header Bar */}
         <header className="workspace-center-header">
           <div className="center-header-left">
+            {/* Toggle Target Sidebar */}
+            <button
+              type="button"
+              className="btn btn-outline btn-xs sidebar-toggle-btn"
+              onClick={() => setIsSidebarOpen(prev => !prev)}
+              title={isSidebarOpen ? "Collapse Target Sessions Sidebar" : "Expand Target Sessions Sidebar"}
+            >
+              {isSidebarOpen ? <PanelLeftClose size={13} /> : <PanelLeft size={13} />}
+              <span className="sidebar-toggle-text">{isSidebarOpen ? 'Hide' : 'Targets'}</span>
+            </button>
+
             <div
               className="active-target-mark"
               style={{ background: getSectorGradient(activeCompany?.sector) }}
             >
               {activeCompany?.initials || 'CO'}
             </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+
+            <div className="active-target-meta-group">
+              <div className="target-title-line">
                 <h2 className="active-target-title">{activeCompany?.name}</h2>
-                <span className="badge badge-secondary" style={{ fontSize: '0.6875rem' }}>
+                <span className="badge badge-secondary sector-badge">
                   {activeCompany?.sector}
                 </span>
                 {reportMarkdown && (
-                  <span className="badge badge-success" style={{ fontSize: '0.625rem', gap: '0.2rem' }}>
+                  <span className="badge badge-success dossier-badge">
                     <CheckCircle2 size={10} /> Dossier Ready
                   </span>
                 )}
               </div>
-              <div className="active-target-metrics">
-                <span><strong>${revenue}M</strong> LTM Revenue</span>
-                <span className="dot-divider">·</span>
-                <span><strong>{growth}%</strong> Growth</span>
-                <span className="dot-divider">·</span>
-                <span><strong>{margin}%</strong> EBITDA</span>
-                <span className="dot-divider">·</span>
-                <span><strong>{retention}%</strong> NRR</span>
-                <span className="dot-divider">·</span>
-                <span>Net Debt: <strong>${netDebt}M</strong></span>
+
+              <div className="target-kpi-strip">
+                <span className="kpi-tag"><strong>${revenue}M</strong> Rev</span>
+                <span className="kpi-tag"><strong>{growth}%</strong> YoY</span>
+                <span className="kpi-tag"><strong>{margin}%</strong> EBITDA</span>
+                <span className="kpi-tag"><strong>{retention}%</strong> NRR</span>
+                <span className="kpi-tag debt-tag">Debt: <strong>${netDebt}M</strong></span>
               </div>
             </div>
           </div>
@@ -505,33 +523,35 @@ I have synthesized market intelligence, verified precedent transactions, and gen
           <div className="center-header-right">
             <button
               type="button"
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary btn-xs header-action-btn"
               onClick={handleRunDeepResearch}
               disabled={isAgentRunning}
               title="Dispatch multi-agent research and update dossier canvas"
             >
-              <Sparkles size={13} className={isAgentRunning ? 'spin-slow' : ''} />
-              <span>{isAgentRunning ? 'Agents Researching...' : reportMarkdown ? 'Re-run Deep Research' : 'Run Deep Research'}</span>
+              <Sparkles size={12} className={isAgentRunning ? 'spin-slow' : ''} />
+              <span className="btn-label-text">
+                {isAgentRunning ? 'Researching...' : reportMarkdown ? 'Re-run Agent' : 'Deep Research'}
+              </span>
             </button>
 
             <button
               type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setIsCanvasOpen(!isCanvasOpen)}
-              title={isCanvasOpen ? 'Collapse Deal Canvas' : 'Expand Deal Canvas'}
+              className={`btn btn-xs header-action-btn ${isCanvasOpen ? 'btn-secondary' : 'btn-outline'}`}
+              onClick={() => setIsCanvasOpen(prev => !prev)}
+              title={isCanvasOpen ? 'Close Living Canvas' : 'Open Living Canvas'}
             >
-              <Layers size={13} />
-              <span>{isCanvasOpen ? 'Hide Canvas' : 'View Canvas'}</span>
-              {isCanvasOpen ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+              <Layers size={12} />
+              <span className="btn-label-text">{isCanvasOpen ? 'Canvas' : 'Canvas'}</span>
+              <span className={`canvas-status-dot ${reportMarkdown ? 'dot-active' : ''}`} />
             </button>
 
             <button
               type="button"
-              className="btn btn-outline btn-sm btn-icon"
+              className="btn btn-outline btn-xs btn-icon"
               onClick={handleClearSessionChat}
               title="Reset conversation for this target"
             >
-              <RotateCcw size={13} />
+              <RotateCcw size={12} />
             </button>
           </div>
         </header>
@@ -675,9 +695,8 @@ I have synthesized market intelligence, verified precedent transactions, and gen
       {/* ========================================================
           COLUMN 3: LIVING DEAL CANVAS (INTERACTIVE ARTIFACT)
           ======================================================== */}
-      {isCanvasOpen && (
-        <aside className="chat-workspace-canvas">
-          {/* Canvas Navigation Header */}
+      <aside className={`chat-workspace-canvas ${isCanvasOpen ? 'is-open' : 'is-collapsed'}`}>
+        {/* Canvas Navigation Header */}
           <div className="canvas-header">
             <div className="canvas-header-title">
               <FileText size={15} className="text-emerald-500" />
@@ -797,35 +816,49 @@ I have synthesized market intelligence, verified precedent transactions, and gen
                   </div>
                 </div>
 
-                {/* Mathematical Equity Value Bridge */}
-                <div className="card-sub-block">
+                {/* Enterprise to Equity Value Bridge (Clean Institutional Waterfall + Formula) */}
+                <div className="card-sub-block bridge-block">
                   <div className="sub-block-title-row">
                     <span className="sub-block-title">Enterprise to Equity Value Bridge</span>
-                    <span className="text-muted-foreground" style={{ fontSize: '0.6875rem' }}>Median Reference</span>
+                    <span className="badge badge-secondary badge-xs">Median Reference</span>
                   </div>
 
-                  <div className="bridge-equation-grid">
-                    <div className="bridge-calc-card">
-                      <span className="bridge-calc-label">Enterprise Value</span>
-                      <strong className="bridge-calc-value">{money(medianEV)}</strong>
-                      <small className="bridge-calc-sub">{multiples.median.toFixed(1)}x EV</small>
+                  {/* Institutional Bridge Waterfall Table */}
+                  <div className="institutional-bridge-table">
+                    <div className="bridge-row">
+                      <div className="bridge-row-label">
+                        <span className="bridge-legend-dot dot-blue" />
+                        <span>Enterprise Value ({multiples.median.toFixed(1)}x EV/Rev)</span>
+                      </div>
+                      <span className="bridge-row-val">{money(medianEV)}</span>
                     </div>
 
-                    <div className="bridge-operator">−</div>
-
-                    <div className="bridge-calc-card bridge-debt-card">
-                      <span className="bridge-calc-label">Net Debt</span>
-                      <strong className="bridge-calc-value">{money(netDebt)}</strong>
-                      <small className="bridge-calc-sub">Deduction</small>
+                    <div className="bridge-row bridge-deduct-row">
+                      <div className="bridge-row-label">
+                        <span className="bridge-legend-dot dot-red" />
+                        <span>Less: Net Debt (Deduction)</span>
+                      </div>
+                      <span className="bridge-row-val text-destructive">− {money(netDebt)}</span>
                     </div>
 
-                    <div className="bridge-operator">=</div>
+                    <div className="bridge-divider" />
 
-                    <div className="bridge-calc-card bridge-equity-card">
-                      <span className="bridge-calc-label">Indicative Equity Value</span>
-                      <strong className="bridge-calc-value text-emerald-500">{money(medianEquity)}</strong>
-                      <small className="bridge-calc-sub text-emerald-600">Net to Seller</small>
+                    <div className="bridge-row bridge-result-row">
+                      <div className="bridge-row-label">
+                        <span className="bridge-legend-dot dot-green" />
+                        <strong>Indicative Equity Value (Net to Seller)</strong>
+                      </div>
+                      <strong className="bridge-row-val text-emerald-500">{money(medianEquity)}</strong>
                     </div>
+                  </div>
+
+                  {/* Clean Visual Formula Bar */}
+                  <div className="bridge-formula-pill">
+                    <span className="formula-part ev-part">{money(medianEV)} EV</span>
+                    <span className="formula-op">−</span>
+                    <span className="formula-part debt-part">{money(netDebt)} Debt</span>
+                    <span className="formula-op">=</span>
+                    <span className="formula-part equity-part">{money(medianEquity)} Equity</span>
                   </div>
                 </div>
 
@@ -1046,7 +1079,6 @@ I have synthesized market intelligence, verified precedent transactions, and gen
             )}
           </div>
         </aside>
-      )}
     </div>
   );
 }
