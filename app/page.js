@@ -647,56 +647,6 @@ export default function Home() {
 
 
           <div className="shadcn-nav-actions">
-            {/* AI Provider Status Chip */}
-            <button
-              type="button"
-              className="btn btn-outline btn-sm nav-model-pill"
-              onClick={() => setIsApiKeyModalOpen(true)}
-              title={hasServerKey
-                ? `Active AI: ${activeProviderLabel} (${activeModel || 'Default'}) · Active via Vercel Environment Variables (Persistent across all sessions).`
-                : (hasActiveKey
-                  ? `Active AI: ${activeProviderLabel} (${activeModel || 'Default'}) · Active via session key.`
-                  : `Active AI: ${activeProviderLabel}. Running in Domain Simulator. Click to configure key.`)
-              }
-            >
-              <span
-                className="status-dot-pulse"
-                style={{
-                  backgroundColor: hasActiveKey ? '#10b981' : '#f59e0b'
-                }}
-              />
-              <span className="nav-model-name">{activeProviderLabel}</span>
-              <span className={`badge ${hasActiveKey ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '0.625rem', padding: '0.05rem 0.35rem' }}>
-                {hasServerKey ? 'Vercel AI' : (hasActiveKey ? 'Live AI' : 'Offline')}
-              </span>
-            </button>
-
-            {/* Neon PostgreSQL Cloud Database Action */}
-            <button
-              type="button"
-              className="btn btn-outline btn-sm nav-model-pill"
-              onClick={() => {
-                fetch('/api/db/health')
-                  .then(r => r.json())
-                  .then(d => {
-                    if (d.connected) {
-                      setToast(`Neon PostgreSQL Online: ${d.counts.companies} companies & ${d.counts.workspaces} workspaces stored in AWS us-east-2 (${d.latencyMs}ms).`);
-                    } else {
-                      setToast(`Database Notice: ${d.error || 'Connecting to Neon...'}`);
-                    }
-                  })
-                  .catch(() => setToast('Checking database connectivity...'));
-              }}
-              title={dbConnected ? "Connected to Neon PostgreSQL (aws-us-east-2). All companies, research briefs, and financials are permanently stored in the cloud database." : "Neon PostgreSQL: Connecting..."}
-              style={{ gap: '0.4rem' }}
-            >
-              <Database size={13} style={{ color: dbConnected ? '#10b981' : '#f59e0b' }} />
-              <span className="nav-model-name">Neon DB</span>
-              <span className={`badge ${dbConnected ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '0.625rem', padding: '0.05rem 0.35rem' }}>
-                {dbConnected ? 'Live' : (dbSyncing ? 'Syncing' : 'Connected')}
-              </span>
-            </button>
-
             {/* Unified Dropdown Menu */}
             <div className="dropdown-wrapper" ref={dropdownRef}>
               <button
