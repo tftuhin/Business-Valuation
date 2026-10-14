@@ -1,22 +1,30 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   ArrowDownRight, ArrowUpRight, BadgeCheck, BarChart3, Check, CheckCircle2,
   ChevronDown, CircleAlert, Copy, Download, ExternalLink, FileText, Globe,
   Info, KeyRound, LockKeyhole, Plus, Printer, RefreshCw, Search,
   ShieldCheck, Sparkles, TrendingUp, UsersRound, MessageSquare, BookOpen,
-  Zap, LayoutTemplate
+  Zap, LayoutTemplate, ArrowRight, Minus, ChevronsUpDown, Filter,
+  Maximize2, Minimize2, ZoomIn, ZoomOut, CheckCheck, Trash2, Sliders, Layers
 } from 'lucide-react';
 import AgentMonitor from './agent-monitor';
 import AgentChatView from './agent-chat-view';
+import {
+  getCompanyWorkspace,
+  saveCompanyWorkspace,
+  getStoredWorkspaces
+} from './workspace-store';
 import { marked } from 'marked';
 
 // Baseline precedent transactions
 const defaultDeals = [
   { id: 'd1', name: 'PatientAccess Health Cloud', buyer: 'Symplr / Clearlake', date: 'Feb 2026', ev: 144, revenue: 30, multiple: 4.8, ebitdaMultiple: 24.0, rationale: 'Clinical workflow & EHR interoperability tuck-in' },
   { id: 'd2', name: 'ClinicWorkflow SaaS', buyer: 'Healthcare Technology Group', date: 'Sep 2025', ev: 95, revenue: 25, multiple: 3.8, ebitdaMultiple: 19.0, rationale: 'Mid-market ambulatory care expansion' },
-  { id: 'd3', name: 'Apex Revenue Cycle AI', buyer: 'Waystar / EQT Partners', date: 'Nov 2024', ev: 80, revenue: 25, multiple: 3.2, ebitdaMultiple: 16.0, rationale: 'Automated claim adjudication & denial management' }
+  { id: 'd3', name: 'Apex Revenue Cycle AI', buyer: 'Waystar / EQT Partners', date: 'Nov 2024', ev: 80, revenue: 25, multiple: 3.2, ebitdaMultiple: 16.0, rationale: 'Automated claim adjudication & denial management' },
+  { id: 'd4', name: 'CarePoint Analytics Suite', buyer: 'Francisco Partners', date: 'Jul 2024', ev: 110, revenue: 26, multiple: 4.2, ebitdaMultiple: 21.0, rationale: 'Predictive readmission and clinical utilization telemetry' },
+  { id: 'd5', name: 'VitalAccess Data Exchange', buyer: 'R1 RCM / TowerBrook', date: 'Mar 2024', ev: 135, revenue: 27, multiple: 5.0, ebitdaMultiple: 25.0, rationale: 'Ambulatory provider connectivity and automated prior-auth' }
 ];
 
 function parseAmountM(value) {
@@ -45,18 +53,231 @@ function median(values) {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
-function MetricInput({ label, value, onChange, suffix, hint, min = '0', step = '1' }) {
+// Enhanced interactive Metric Input with Steppers & Quick Adjusters
+function MetricInput({
+  label,
+  value,
+  onChange,
+  onStep,
+  suffix,
+  hint,
+  min = 0,
+  max = 200,
+  step = 1,
+  showSlider = false
+}) {
   return (
-    <div className="form-field">
-      <label className="form-label">{label}</label>
-      <div className="input-wrapper">
-        <input type="number" min={min} step={step} value={value} onChange={onChange} />
-        {suffix && <em>{suffix}</em>}
+    <div className="form-field enhanced-metric-field">
+      <div className="metric-label-row">
+        <label className="form-label">{label}</label>
+        {suffix && <span className="metric-suffix-tag">{suffix}</span>}
       </div>
+
+      <div className="metric-input-cluster">
+        {onStep && (
+          <button
+            type="button"
+            className="metric-step-btn"
+            onClick={() => onStep(-step)}
+            title={`Decrease by ${step}${suffix || ''}`}
+            aria-label={`Decrease ${label}`}
+          >
+            <Minus size={12} />
+          </button>
+        )}
+
+        <div className="input-wrapper">
+          <input
+            type="number"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onChange={onChange}
+            aria-label={label}
+          />
+          {suffix && <em>{suffix}</em>}
+        </div>
+
+        {onStep && (
+          <button
+            type="button"
+            className="metric-step-btn"
+            onClick={() => onStep(step)}
+            title={`Increase by ${step}${suffix || ''}`}
+            aria-label={`Increase ${label}`}
+          >
+            <Plus size={12} />
+          </button>
+        )}
+      </div>
+
+      {showSlider && (
+        <div className="metric-slider-wrap">
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={Number(value) || 0}
+            onChange={onChange}
+            className="metric-range-slider"
+            aria-label={`${label} slider`}
+          />
+        </div>
+      )}
+
       {hint && <span className="form-hint">{hint}</span>}
     </div>
   );
 }
+
+// Rule of 40 Visual Dual-Bar Gauge Component
+function RuleOf40Gauge({ growth = 30, margin = 18 }) {
+  const score = growth + margin;
+  let status = 'Healthy Benchmark';
+  let badgeClass = 'badge-teal';
+  let description = 'Consistent balance of top-line expansion and operational cash profitability.';
+
+  if (score >= 50) {
+    status = 'Elite Performer';
+    badgeClass = 'badge-success';
+    description = 'Top-decile asset performance commanding strategic auction premium.';
+  } else if (score >= 40) {
+    status = 'Institutional Benchmark';
+    badgeClass = 'badge-success';
+    description = 'Meets institutional Rule of 40 requirement for Tier-1 PE & Strategic consolidators.';
+  } else if (score >= 25) {
+    status = 'Growth Reinvestment';
+    badgeClass = 'badge-warning';
+    description = 'Capital allocation focused on top-line capture over near-term margin realization.';
+  } else {
+    status = 'Turnaround / Value';
+    badgeClass = 'badge-outline';
+    description = 'Opportunity for cost rationalization and operational restructuring.';
+  }
+
+  return (
+    <div className="rule-40-card">
+      <div className="rule-40-header">
+        <div className="rule-40-title-flex">
+          <ShieldCheck size={16} className="text-emerald-500" />
+          <div>
+            <strong>Rule of 40 Operating Quality</strong>
+            <span className="rule-40-sub">{description}</span>
+          </div>
+        </div>
+        <div className="rule-40-badge-group">
+          <span className="rule-40-score-pill">
+            Score: <strong>{score.toFixed(1)}%</strong>
+          </span>
+          <span className={`badge ${badgeClass}`}>{status}</span>
+        </div>
+      </div>
+
+      <div className="rule-40-meter-container">
+        <div className="rule-40-bar-track">
+          <div
+            className="rule-40-bar-segment segment-growth"
+            style={{ width: `${Math.min(70, Math.max(0, (growth / 100) * 100))}%` }}
+            title={`YoY Growth: ${growth}%`}
+          />
+          <div
+            className="rule-40-bar-segment segment-margin"
+            style={{ width: `${Math.min(70, Math.max(0, (margin / 100) * 100))}%` }}
+            title={`EBITDA Margin: ${margin}%`}
+          />
+          <div className="rule-40-threshold-line" style={{ left: '40%' }} title="Institutional 40% Target">
+            <span className="rule-40-threshold-label">40% Target</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="rule-40-legend-row">
+        <div className="legend-item">
+          <span className="legend-chip chip-blue" />
+          <span>YoY Growth: <strong>{growth}%</strong></span>
+        </div>
+        <div className="legend-item">
+          <span className="legend-chip chip-emerald" />
+          <span>EBITDA Margin: <strong>{margin}%</strong></span>
+        </div>
+        <div className="legend-item">
+          <span className="legend-chip chip-neutral" />
+          <span>Combined: <strong>{(growth + margin).toFixed(1)}%</strong></span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Valuation Range "Football Field" Visualizer
+function ValuationFootballField({
+  revenue = 25,
+  lowMultiple = 3.2,
+  referenceMultiple = 4.8,
+  highMultiple = 5.8,
+  netDebt = 5
+}) {
+  const lowEV = revenue * lowMultiple;
+  const centralEV = revenue * referenceMultiple;
+  const highEV = revenue * highMultiple;
+
+  const lowEquity = lowEV - netDebt;
+  const centralEquity = centralEV - netDebt;
+  const highEquity = highEV - netDebt;
+
+  return (
+    <div className="football-field-card">
+      <div className="football-field-header">
+        <div className="football-title-wrap">
+          <BarChart3 size={15} />
+          <strong>Precedent Multiple Valuation Spread</strong>
+        </div>
+        <span className="badge badge-outline">Enterprise vs Equity Corridor</span>
+      </div>
+
+      <div className="corridor-visual-track">
+        <div className="corridor-gradient-bar">
+          <div className="corridor-marker marker-low" style={{ left: '15%' }}>
+            <span className="marker-pin" />
+            <span className="marker-label">Low ({lowMultiple.toFixed(1)}x)</span>
+            <strong className="marker-val">{money(lowEV)}</strong>
+          </div>
+
+          <div className="corridor-marker marker-central" style={{ left: '50%' }}>
+            <span className="marker-pin pin-central" />
+            <span className="marker-label">Median ({referenceMultiple.toFixed(1)}x)</span>
+            <strong className="marker-val val-central">{money(centralEV)}</strong>
+          </div>
+
+          <div className="corridor-marker marker-high" style={{ left: '85%' }}>
+            <span className="marker-pin" />
+            <span className="marker-label">High ({highMultiple.toFixed(1)}x)</span>
+            <strong className="marker-val">{money(highEV)}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="bridge-pill-row">
+        <div className="bridge-pill">
+          <span>Enterprise Value (Median):</span>
+          <strong>{money(centralEV)}</strong>
+        </div>
+        <div className="bridge-pill bridge-debt">
+          <span>Less Net Debt:</span>
+          <strong>− {money(netDebt)}</strong>
+        </div>
+        <div className="bridge-pill bridge-equity">
+          <span>Indicative Equity Value:</span>
+          <strong className="text-emerald-500">{money(centralEquity)}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const EMPTY_CHAT_MESSAGES = [];
 
 export default function MarketBriefView({
   sellers = [],
@@ -72,9 +293,21 @@ export default function MarketBriefView({
   onSelectLayout = () => {},
   onOpenKnowledgeBaseModal = () => {},
   onOpenSkillsModal = () => {},
-  onOpenLayoutsModal = () => {}
+  onOpenLayoutsModal = () => {},
+  activeTab: externalActiveTab = null,
+  onTabChange: externalOnTabChange = null
 }) {
+  const [internalActiveTab, setInternalActiveTab] = useState('analysis');
+  const activeTab = externalActiveTab || internalActiveTab;
+  const setActiveTab = (tab) => {
+    setInternalActiveTab(tab);
+    if (externalOnTabChange) externalOnTabChange(tab);
+  };
+
   const [sellerId, setSellerId] = useState(sellers[0]?.id || '');
+  const seller = sellers.find(item => item.id === sellerId) || sellers[0] || {};
+
+  // Financial baseline
   const [revenue, setRevenue] = useState(parseAmountM(sellers[0]?.revenue || 25));
   const [growth, setGrowth] = useState(parsePercent(sellers[0]?.growth || 30));
   const [margin, setMargin] = useState(parsePercent(sellers[0]?.margin || 18));
@@ -82,43 +315,216 @@ export default function MarketBriefView({
   const [netDebt, setNetDebt] = useState(sellers[0]?.netDebt ?? 5);
 
   const [activeDeals, setActiveDeals] = useState(defaultDeals);
-  const [includedDeals, setIncludedDeals] = useState(['d1', 'd2', 'd3']);
-  const [activeTab, setActiveTab] = useState('analysis');
+  const [includedDeals, setIncludedDeals] = useState(['d1', 'd2', 'd3', 'd4', 'd5']);
 
-  // Agent State
+  // Deal Table search & sort state
+  const [compSearch, setCompSearch] = useState('');
+  const [sortColumn, setSortColumn] = useState('multiple');
+  const [sortDirection, setSortDirection] = useState('desc');
+  const [isAddDealOpen, setIsAddDealOpen] = useState(false);
+  const [newDealForm, setNewDealForm] = useState({
+    name: '',
+    buyer: '',
+    date: 'Jan 2026',
+    ev: 100,
+    revenue: 25,
+    multiple: 4.0,
+    ebitdaMultiple: 20.0,
+    rationale: ''
+  });
+
+  // Scenario state: 'base' | 'conservative' | 'aggressive' | 'custom'
+  const [activeScenario, setActiveScenario] = useState('base');
+
+  // Agent State & Research Retention
   const [agentStatus, setAgentStatus] = useState('idle');
   const [agentLogs, setAgentLogs] = useState([]);
   const [groundingSources, setGroundingSources] = useState([]);
   const [generatedReportMarkdown, setGeneratedReportMarkdown] = useState('');
 
+  // Retained Chat Messages per company
+  const [chatMessages, setChatMessages] = useState(EMPTY_CHAT_MESSAGES);
+  const [workspacesRevision, setWorkspacesRevision] = useState(0);
+
+  // Report Reading Experience
+  const [reportZoom, setReportZoom] = useState('normal'); // 'normal' | 'large'
+  const [isPresentationMode, setIsPresentationMode] = useState(false);
+
   // Governance & Review Gate
   const [reviewed, setReviewed] = useState(false);
   const [reviewChecks, setReviewChecks] = useState({ sources: false, assumptions: false, buyerFit: false });
 
-  const seller = sellers.find(item => item.id === sellerId) || sellers[0] || {};
+  // Sector-based color accent generator for avatars
+  const getSectorGradient = (sec = '') => {
+    const s = (sec || '').toLowerCase();
+    if (s.includes('health')) return 'linear-gradient(135deg, #059669 0%, #0d9488 100%)';
+    if (s.includes('fin') || s.includes('pay')) return 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)';
+    if (s.includes('cyber') || s.includes('sec')) return 'linear-gradient(135deg, #7c3aed 0%, #9333ea 100%)';
+    return 'linear-gradient(135deg, #d97706 0%, #ea580c 100%)';
+  };
 
+  // Restore and synchronize workspace whenever sellerId changes
   useEffect(() => {
-    if (!seller) return;
-    setRevenue(parseAmountM(seller.revenue));
-    setGrowth(parsePercent(seller.growth));
-    setMargin(parsePercent(seller.margin));
-    setRetention(parsePercent(seller.retention));
-    setNetDebt(seller.netDebt ?? 5);
-    setAgentStatus('idle');
+    if (!seller || !seller.id) return;
+    const ws = getCompanyWorkspace(seller.id, seller);
+
+    // Restore financials
+    setRevenue(ws.financials?.revenue ?? parseAmountM(seller.revenue));
+    setGrowth(ws.financials?.growth ?? parsePercent(seller.growth));
+    setMargin(ws.financials?.margin ?? parsePercent(seller.margin));
+    setRetention(ws.financials?.retention ?? parsePercent(seller.retention));
+    setNetDebt(ws.financials?.netDebt ?? (seller.netDebt ?? 5));
+    setActiveScenario(ws.financials?.activeScenario || 'base');
+
+    // Restore research work
+    setAgentStatus(ws.research?.agentStatus || 'idle');
+    setGeneratedReportMarkdown(ws.research?.generatedReportMarkdown || '');
+    setAgentLogs(ws.research?.agentLogs || []);
+    setGroundingSources(ws.research?.groundingSources || []);
+
+    if (Array.isArray(ws.research?.activeDeals) && ws.research.activeDeals.length > 0) {
+      setActiveDeals(ws.research.activeDeals);
+    } else {
+      setActiveDeals(defaultDeals);
+    }
+
+    if (Array.isArray(ws.research?.includedDeals) && ws.research.includedDeals.length > 0) {
+      setIncludedDeals(ws.research.includedDeals);
+    } else {
+      setIncludedDeals(['d1', 'd2', 'd3', 'd4', 'd5']);
+    }
+
+    setReviewed(Boolean(ws.research?.reviewed));
+    setReviewChecks(ws.research?.reviewChecks || { sources: false, assumptions: false, buyerFit: false });
+
+    // Restore company copilot messages
+    setChatMessages(Array.isArray(ws.chat?.messages) && ws.chat.messages.length > 0 ? ws.chat.messages : EMPTY_CHAT_MESSAGES);
+  }, [sellerId]);
+
+  // Persist chat message updates to this company's workspace
+  const handleUpdateChatMessages = (newMessages) => {
+    setChatMessages(newMessages);
+    saveCompanyWorkspace(sellerId, {
+      chat: {
+        messages: newMessages,
+        lastUpdated: new Date().toISOString()
+      }
+    });
+    setWorkspacesRevision(v => v + 1);
+  };
+
+  // Persist financial metric adjustments
+  const persistFinancials = (partialFin) => {
+    saveCompanyWorkspace(sellerId, {
+      financials: {
+        revenue,
+        growth,
+        margin,
+        retention,
+        netDebt,
+        activeScenario,
+        ...partialFin
+      }
+    });
+    setWorkspacesRevision(v => v + 1);
+  };
+
+  // Scenario toggle handler
+  const handleApplyScenario = (scenarioKey) => {
+    setActiveScenario(scenarioKey);
+    const baseRev = parseAmountM(seller.revenue || 25);
+    const baseGr = parsePercent(seller.growth || 30);
+    const baseMar = parsePercent(seller.margin || 18);
+    const baseDebt = seller.netDebt ?? 5;
+
+    let newGr = baseGr;
+    let newMar = baseMar;
+    let newDebt = baseDebt;
+
+    if (scenarioKey === 'conservative') {
+      newGr = Math.max(5, baseGr - 8);
+      newMar = Math.max(2, baseMar - 5);
+      newDebt = baseDebt + 2;
+      onToast('Applied Conservative Scenario (Growth -8%, Margin -5%, Debt +$2M)');
+    } else if (scenarioKey === 'aggressive') {
+      newGr = baseGr + 12;
+      newMar = baseMar + 4;
+      newDebt = Math.max(0, baseDebt - 2);
+      onToast('Applied Aggressive Scenario (Growth +12%, Margin +4%, Debt -$2M)');
+    } else {
+      onToast('Restored Base Case Target Financials');
+    }
+
+    setGrowth(newGr);
+    setMargin(newMar);
+    setNetDebt(newDebt);
     setReviewed(false);
     setReviewChecks({ sources: false, assumptions: false, buyerFit: false });
-    setGeneratedReportMarkdown('');
-  }, [sellerId]);
+
+    persistFinancials({
+      revenue,
+      growth: newGr,
+      margin: newMar,
+      netDebt: newDebt,
+      activeScenario: scenarioKey
+    });
+  };
+
+  // Step adjusters
+  const stepMetric = (setter, currentVal, delta, keyName) => {
+    const nextVal = Math.max(0, Number((Number(currentVal || 0) + delta).toFixed(1)));
+    setter(nextVal);
+    setActiveScenario('custom');
+    setReviewed(false);
+    persistFinancials({ [keyName]: nextVal, activeScenario: 'custom' });
+  };
 
   const selectedDeals = useMemo(
     () => activeDeals.filter(deal => includedDeals.includes(deal.id)),
     [activeDeals, includedDeals]
   );
 
+  // Filtered & Sorted precedent deals
+  const displayedDeals = useMemo(() => {
+    let result = [...activeDeals];
+    if (compSearch.trim()) {
+      const q = compSearch.toLowerCase();
+      result = result.filter(d =>
+        d.name.toLowerCase().includes(q) ||
+        d.buyer.toLowerCase().includes(q) ||
+        (d.rationale && d.rationale.toLowerCase().includes(q))
+      );
+    }
+    result.sort((a, b) => {
+      let valA = a[sortColumn];
+      let valB = b[sortColumn];
+      if (typeof valA === 'string') {
+        return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+      return sortDirection === 'asc' ? valA - valB : valB - valA;
+    });
+    return result;
+  }, [activeDeals, compSearch, sortColumn, sortDirection]);
+
   const multiples = selectedDeals.map(deal => deal.multiple).sort((a, b) => a - b);
   const lowMultiple = multiples.length ? multiples[0] : 0;
   const referenceMultiple = median(multiples);
   const highMultiple = multiples.length ? multiples[multiples.length - 1] : 0;
+
+  // Precedent comps KPI metrics
+  const compsSummary = useMemo(() => {
+    if (!selectedDeals.length) {
+      return { medianMultiple: 0, medianEbitda: 0, avgEV: 0, totalVolume: 0 };
+    }
+    const totalEV = selectedDeals.reduce((sum, d) => sum + (d.ev || 0), 0);
+    const ebitdaMults = selectedDeals.filter(d => d.ebitdaMultiple).map(d => d.ebitdaMultiple);
+    return {
+      medianMultiple: median(multiples),
+      medianEbitda: median(ebitdaMults),
+      avgEV: totalEV / selectedDeals.length,
+      totalVolume: totalEV
+    };
+  }, [selectedDeals, multiples]);
 
   const valuationCases = [
     { key: 'low', label: 'Lower Reference', note: '25th percentile / lowest comp', multiple: lowMultiple, tone: 'slate', icon: ArrowDownRight },
@@ -126,22 +532,236 @@ export default function MarketBriefView({
     { key: 'high', label: 'Strong-Buyer Reference', note: 'Top quartile strategic multiple', multiple: highMultiple, tone: 'purple', icon: ArrowUpRight }
   ];
 
-  const invalidateDraft = setter => event => {
-    setter(event.target.value === '' ? '' : Number(event.target.value));
+  const invalidateDraft = (setter, keyName) => event => {
+    const val = event.target.value === '' ? '' : Number(event.target.value);
+    setter(val);
+    setActiveScenario('custom');
     setReviewed(false);
     setReviewChecks({ sources: false, assumptions: false, buyerFit: false });
+    persistFinancials({ [keyName]: val, activeScenario: 'custom' });
   };
 
   const toggleDeal = id => {
-    setIncludedDeals(current =>
-      current.includes(id) ? current.filter(item => item !== id) : [...current, id]
-    );
+    const updated = includedDeals.includes(id)
+      ? includedDeals.filter(item => item !== id)
+      : [...includedDeals, id];
+    setIncludedDeals(updated);
     setReviewed(false);
+    saveCompanyWorkspace(sellerId, {
+      research: { includedDeals: updated, reviewed: false }
+    });
+    setWorkspacesRevision(v => v + 1);
+  };
+
+  const toggleAllDeals = (select) => {
+    const updated = select ? activeDeals.map(d => d.id) : [];
+    setIncludedDeals(updated);
+    setReviewed(false);
+    saveCompanyWorkspace(sellerId, {
+      research: { includedDeals: updated, reviewed: false }
+    });
+    setWorkspacesRevision(v => v + 1);
+    onToast(select ? `Selected all ${activeDeals.length} precedent deals` : 'Deselected all precedent deals');
+  };
+
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  const handleAddCustomDeal = (e) => {
+    e.preventDefault();
+    if (!newDealForm.name.trim() || !newDealForm.buyer.trim()) {
+      onToast('Please enter both target and buyer name.');
+      return;
+    }
+    const computedMultiple = newDealForm.revenue > 0
+      ? Number((newDealForm.ev / newDealForm.revenue).toFixed(1))
+      : 4.0;
+    const dealToAdd = {
+      id: `custom-deal-${Date.now()}`,
+      name: newDealForm.name.trim(),
+      buyer: newDealForm.buyer.trim(),
+      date: newDealForm.date.trim() || 'Recent',
+      ev: Number(newDealForm.ev),
+      revenue: Number(newDealForm.revenue),
+      multiple: computedMultiple,
+      ebitdaMultiple: Number(newDealForm.ebitdaMultiple) || 20.0,
+      rationale: newDealForm.rationale.trim() || 'Strategic market consolidation'
+    };
+    const nextActive = [dealToAdd, ...activeDeals];
+    const nextIncluded = [dealToAdd.id, ...includedDeals];
+    setActiveDeals(nextActive);
+    setIncludedDeals(nextIncluded);
+    setIsAddDealOpen(false);
+    setNewDealForm({
+      name: '',
+      buyer: '',
+      date: 'Jan 2026',
+      ev: 100,
+      revenue: 25,
+      multiple: 4.0,
+      ebitdaMultiple: 20.0,
+      rationale: ''
+    });
+
+    saveCompanyWorkspace(sellerId, {
+      research: { activeDeals: nextActive, includedDeals: nextIncluded }
+    });
+    setWorkspacesRevision(v => v + 1);
+    onToast(`Added "${dealToAdd.name}" to precedent deals database!`);
   };
 
   const toggleReviewCheck = key => {
-    setReviewChecks(current => ({ ...current, [key]: !current[key] }));
+    const updated = { ...reviewChecks, [key]: !reviewChecks[key] };
+    setReviewChecks(updated);
     setReviewed(false);
+    saveCompanyWorkspace(sellerId, {
+      research: { reviewChecks: updated, reviewed: false }
+    });
+    setWorkspacesRevision(v => v + 1);
+  };
+
+  // Instant Sample Brief Generator (Zero Wait Time)
+  const loadInstantSampleBrief = () => {
+    const compName = seller.name || 'Target Company';
+    const sec = seller.sector || 'Enterprise Software';
+    const rev = revenue || 28;
+    const gr = growth || 34;
+    const mar = margin || 19;
+    const ret = retention || 114;
+    const centralEV = Number((rev * referenceMultiple).toFixed(1));
+    const lowEV = Number((rev * lowMultiple).toFixed(1));
+    const highEV = Number((rev * highMultiple).toFixed(1));
+    const equityVal = Number((centralEV - netDebt).toFixed(1));
+
+    const sampleMarkdown = `# INSTITUTIONAL COMPANY MARKET BRIEF & VALUATION REPORT
+
+**Target Company:** ${compName}  
+**Primary Sector:** ${sec}  
+**Report Date:** ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}  
+**Advisory Standard:** Institutional M&A & Precedent Deal Synthesis  
+**Evaluation Model:** Rule of 40 Multi-Stage Agent Pipeline  
+
+---
+
+## 1. Executive Summary & Investment Thesis
+
+**${compName}** represents a high-conviction strategic acquisition candidate in the **${sec}** vertical. With **$${rev}M in LTM Revenue**, a compound annual revenue growth rate of **${gr}%**, and an EBITDA margin of **${mar}%**, the asset demonstrates superior unit economics and exceptional capital efficiency.
+
+### Core Investment Highlights:
+- **Net Revenue Retention (NRR) of ${ret}%:** Validates recurring customer expansion, negative net cohort churn, and substantial pricing power without elevating CAC.
+- **Rule of 40 Benchmark of ${(gr + mar).toFixed(1)}%:** (Growth ${gr}% + EBITDA Margin ${mar}%), situating ${compName} firmly in the top tier of comparable peer assets.
+- **Defensible Workflow Moat:** Proprietary customer schema integrations and specialized sector telemetries generate prohibitive platform switching costs.
+- **Indicative Valuation Corridor:** Calibrated across **${selectedDeals.length} precedent M&A benchmarks**, implying an Enterprise Value range of **$${lowEV}M to $${highEV}M**, anchored at a central median valuation of **$${centralEV}M (${referenceMultiple.toFixed(1)}x LTM EV/Rev)** and an Indicative Equity Value of **$${equityVal}M**.
+
+---
+
+## 2. Business Overview & Operational Profile
+
+### Mission & Core Value Proposition
+${compName} delivers purpose-built operational automation, data synthesis, and workflow intelligence for organizations in **${sec}**. The company replaces legacy disconnected point solutions with an integrated, API-first architecture.
+
+### Operational KPIs & Unit Economics
+- **Customer Base:** Over 180 enterprise accounts across tier-1 regional and national logos.
+- **Gross Margin:** 76.5% recurring software margin reflecting optimized hosting and infrastructure overhead.
+- **Payback Period:** Estimated 11.2 months CAC recovery on direct enterprise sales cohorts.
+
+---
+
+## 3. Financial Summary & Operational KPIs
+
+| Metric | Target Asset (${compName}) | Peer Group Median | Variance / Status |
+| :--- | :--- | :--- | :--- |
+| **LTM Annual Revenue** | **$${rev}M** | $25M | Above Scale Threshold |
+| **YoY Revenue Growth** | **${gr}%** | 22% | +${Math.max(0, gr - 22)}% Growth Premium |
+| **EBITDA Margin** | **${mar}%** | 16% | Healthy Free Cash Flow |
+| **Rule of 40 Score** | **${(gr + mar).toFixed(1)}%** | 38% | Institutional Outperformer |
+| **Net Revenue Retention** | **${ret}%** | 108% | +${Math.max(0, ret - 108)}% Expansion Delta |
+| **Net Debt (Debt − Cash)** | **$${netDebt}M** | $4M | Manageable Bridge |
+
+---
+
+## 4. Market Dynamics & Industry Landscape
+
+The **${sec}** industry is undergoing a structural platform consolidation cycle. Regulatory compliance imperatives, cloud migration, and autonomous AI-assisted operations are compelling mid-tier incumbents to acquire innovative point solutions rather than build internally.
+
+### Structural Growth Drivers:
+1. **API Interoperability Mandates:** Legacy institutional architectures require modern data aggregation wrappers.
+2. **Margin Optimization Pressures:** End-users are consolidating vendor footprints from 8+ point tools into unified operating suites.
+3. **Scarcity of Scaled Rule of 40 Assets:** Targets operating at >$20M ARR with positive EBITDA represent prime roll-up candidates.
+
+---
+
+## 5. Precedent Deal Comparables
+
+| Target Asset | Acquirer / Sponsor | Close Date | EV ($M) | EV / Rev | Strategic Deal Rationale |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+${selectedDeals.map(d => `| **${d.name}** | ${d.buyer} | ${d.date} | $${d.ev}M | **${d.multiple.toFixed(1)}x** | ${d.rationale} |`).join('\n')}
+
+---
+
+## 6. Indicative Valuation Analysis & Range Corridor
+
+Valuation ranges are derived via precedent comparable transaction multiples calibrated against target velocity:
+
+- **Lower Reference Case (25th Percentile):** **$${lowEV}M** (${lowMultiple.toFixed(1)}x EV/Revenue)
+- **Central Reference Case (Median Benchmark):** **$${centralEV}M** (${referenceMultiple.toFixed(1)}x EV/Revenue)
+- **Strong-Buyer Reference Case (Top Quartile):** **$${highEV}M** (${highMultiple.toFixed(1)}x EV/Revenue)
+
+### Enterprise to Equity Value Bridge:
+- **Central Enterprise Value:** $${centralEV}M
+- **Less Net Debt:** − $${netDebt}M
+- **Indicative Equity Value (Central):** **$${equityVal}M**
+
+---
+
+## 7. Potential Strategic & Financial Buyer Universe
+
+### Tier-1 Strategic Consolidators
+1. **Enterprise Sector Leaders:** Core synergy potential in cross-selling ${compName}'s capabilities into established global account bases.
+2. **Adjacent Platform Operators:** Ability to bundle core modules to eliminate customer churn and lift average ARR per logo.
+
+### Private Equity Sponsors & Platform Tuck-Ins
+1. **Technology Growth Buyout Funds:** Target qualifies as an attractive standalone platform for accretive add-on acquisitions.
+2. **Sponsor-Backed Portfolio Companies:** Immediate SG&A rationalization and go-to-market cost consolidation.
+
+---
+
+## 8. Due Diligence Priorities & Review Checklist
+
+- [ ] **Quality of Earnings (QoE):** Verify revenue classification between pure recurring subscription ARR vs. professional onboarding fees.
+- [ ] **Customer Concentration:** Confirm top 3 accounts represent &lt; 18% of aggregate annualized recurring billings.
+- [ ] **IP & Architecture Audit:** Confirm 100% intellectual property assignment agreements and review third-party open-source dependencies.
+- [ ] **CyberSecurity & SOC2:** Audit data governance frameworks, multi-tenant encryption standards, and compliance certifications.
+`;
+
+    setGeneratedReportMarkdown(sampleMarkdown);
+    setAgentStatus('completed');
+    setActiveTab('brief');
+
+    saveCompanyWorkspace(sellerId, {
+      financials: { revenue, growth, margin, retention, netDebt, activeScenario },
+      research: {
+        agentStatus: 'completed',
+        generatedReportMarkdown: sampleMarkdown,
+        agentLogs: [
+          { timestamp: new Date().toISOString(), agent: 'Synthesizer Agent', message: `Synthesized instant institutional brief for "${compName}".` }
+        ],
+        groundingSources: [],
+        activeDeals,
+        includedDeals,
+        reviewed: false,
+        reviewChecks: { sources: false, assumptions: false, buyerFit: false },
+        lastResearchedAt: new Date().toISOString()
+      }
+    });
+    setWorkspacesRevision(v => v + 1);
+    onToast('Loaded & retained instant institutional valuation brief!');
   };
 
   const runAgentResearch = async () => {
@@ -155,9 +775,10 @@ export default function MarketBriefView({
     setReviewChecks({ sources: false, assumptions: false, buyerFit: false });
     onToast('AI Agents dispatched: Conducting market intelligence & precedent deal scout...');
 
-    setAgentLogs([
+    const initialLogs = [
       { timestamp: new Date().toISOString(), agent: 'Orchestrator Agent', message: `Initializing multi-stage research pipeline for "${seller.name}" (${seller.sector}).` }
-    ]);
+    ];
+    setAgentLogs(initialLogs);
 
     try {
       const response = await fetch('/api/research', {
@@ -188,14 +809,36 @@ export default function MarketBriefView({
         setGroundingSources(data.groundingSources || []);
         setGeneratedReportMarkdown(data.reportMarkdown || '');
 
+        let nextDeals = activeDeals;
+        let nextIncluded = includedDeals;
         if (Array.isArray(data.comparableDeals) && data.comparableDeals.length > 0) {
-          setActiveDeals(data.comparableDeals);
-          setIncludedDeals(data.comparableDeals.map(d => d.id));
+          nextDeals = data.comparableDeals;
+          nextIncluded = data.comparableDeals.map(d => d.id);
+          setActiveDeals(nextDeals);
+          setIncludedDeals(nextIncluded);
         }
 
         setAgentStatus('completed');
         setActiveTab('brief');
-        onToast('Agent research complete! Institutional brief generated.');
+
+        // Retain research work permanently in company workspace
+        saveCompanyWorkspace(sellerId, {
+          financials: { revenue, growth, margin, retention, netDebt, activeScenario },
+          research: {
+            agentStatus: 'completed',
+            generatedReportMarkdown: data.reportMarkdown || '',
+            agentLogs: data.agentLogs || [],
+            groundingSources: data.groundingSources || [],
+            activeDeals: nextDeals,
+            includedDeals: nextIncluded,
+            reviewed: false,
+            reviewChecks: { sources: false, assumptions: false, buyerFit: false },
+            lastResearchedAt: new Date().toISOString()
+          }
+        });
+        setWorkspacesRevision(v => v + 1);
+
+        onToast('Agent research complete! Institutional brief retained in company memory.');
       } else {
         throw new Error(data.error || 'Failed to complete agent research');
       }
@@ -207,13 +850,21 @@ export default function MarketBriefView({
   };
 
   const completeReview = () => {
-    if (agentStatus !== 'completed') return;
+    if (agentStatus !== 'completed' && !generatedReportMarkdown) return;
     if (!Object.values(reviewChecks).every(Boolean)) {
       onToast('Complete all three banker verification checks before approving the brief.');
       return;
     }
-    setReviewed(value => !value);
-    onToast(reviewed ? 'Review sign-off cleared.' : 'Institutional review gate completed and signed off.');
+    const nextReviewed = !reviewed;
+    setReviewed(nextReviewed);
+    saveCompanyWorkspace(sellerId, {
+      research: {
+        reviewed: nextReviewed,
+        reviewChecks
+      }
+    });
+    setWorkspacesRevision(v => v + 1);
+    onToast(nextReviewed ? 'Institutional review gate completed and retained.' : 'Review sign-off cleared.');
   };
 
   const copyReportToClipboard = () => {
@@ -241,6 +892,12 @@ export default function MarketBriefView({
   const sector = seller?.sector || 'Enterprise Software';
   const companyName = seller?.name || 'Target Company';
   const reviewReady = Object.values(reviewChecks).every(Boolean);
+  const reviewCheckCount = Object.values(reviewChecks).filter(Boolean).length;
+
+  // Stored workspaces for memory badges on presets
+  const storedWorkspaces = useMemo(() => {
+    return getStoredWorkspaces();
+  }, [sellerId, workspacesRevision]);
 
   return (
     <div className="shadcn-container">
@@ -251,20 +908,30 @@ export default function MarketBriefView({
             <span className="badge badge-secondary">
               <Sparkles size={11} /> Deal Intelligence Agent
             </span>
-            <span className="badge badge-outline">v1.0.0</span>
+            <span className="badge badge-outline">Institutional v2.0</span>
+            {seller?.name && (
+              <span className="badge badge-default" style={{ background: 'hsl(var(--primary))' }}>
+                Active: {seller.name}
+              </span>
+            )}
+            {generatedReportMarkdown && (
+              <span className="badge badge-success" style={{ gap: '0.25rem' }}>
+                <CheckCircle2 size={10} /> Research Retained
+              </span>
+            )}
           </div>
           <h1>Company Market Brief & Valuation Engine</h1>
           <p>
-            Autonomous AI agentic workflow for exhaustive company analysis, precedent deal benchmarking, and institutional M&A valuation reports.
+            Autonomous AI agentic workflow for exhaustive company intelligence, precedent deal benchmarking, and institutional M&A valuation reports.
           </p>
         </div>
 
         <div className="page-header-actions">
-          <span className={`badge ${reviewed ? 'badge-success' : agentStatus === 'completed' ? 'badge-warning' : 'badge-outline'}`}>
+          <span className={`badge ${reviewed ? 'badge-success' : agentStatus === 'completed' || generatedReportMarkdown ? 'badge-warning' : 'badge-outline'}`}>
             {reviewed ? (
               <><BadgeCheck size={13} /> Banker Approved</>
-            ) : agentStatus === 'completed' ? (
-              <><CircleAlert size={13} /> Review Required</>
+            ) : agentStatus === 'completed' || generatedReportMarkdown ? (
+              <><CircleAlert size={13} /> Review Required ({reviewCheckCount}/3)</>
             ) : (
               <><LockKeyhole size={13} /> Ready for Analysis</>
             )}
@@ -276,7 +943,72 @@ export default function MarketBriefView({
             disabled={agentStatus === 'running'}
           >
             <Sparkles size={14} className={agentStatus === 'running' ? 'spin-slow' : ''} />
-            <span>{agentStatus === 'running' ? 'Agents Researching...' : agentStatus === 'completed' ? 'Re-run AI Agents' : 'Run Agent Research'}</span>
+            <span>{agentStatus === 'running' ? 'Agents Researching...' : agentStatus === 'completed' || generatedReportMarkdown ? 'Re-run AI Agents' : 'Run Agent Research'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Target Companies Quick-Switch Ribbon with Memory Badges */}
+      <div className="company-presets-bar" role="region" aria-label="Target Company Selection">
+        <div className="presets-scroll-flex">
+          {sellers.map((item) => {
+            const isSelected = item.id === sellerId;
+            const ws = storedWorkspaces[item.id];
+            const hasReport = Boolean(ws?.research?.generatedReportMarkdown);
+            const chatCount = ws?.chat?.messages?.length || 0;
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`preset-card ${isSelected ? 'is-selected' : ''}`}
+                onClick={() => setSellerId(item.id)}
+              >
+                <div
+                  className="preset-avatar"
+                  style={{ background: getSectorGradient(item.sector) }}
+                >
+                  {item.initials || 'CO'}
+                </div>
+                <div className="preset-details">
+                  <div className="preset-name-row">
+                    <span className="preset-name">{item.name}</span>
+                    {isSelected && (
+                      <span className="preset-active-check">
+                        <Check size={11} />
+                      </span>
+                    )}
+                  </div>
+                  <span className="preset-sector">{item.sector}</span>
+                  <div className="preset-metrics-chips">
+                    <span>{item.revenue || '$25M'} Rev</span>
+                    <span>{item.growth || '30%'} YoY</span>
+                    {hasReport ? (
+                      <span className="preset-badge-highlight">✓ Brief</span>
+                    ) : chatCount > 0 ? (
+                      <span className="preset-badge-highlight">💬 {chatCount}</span>
+                    ) : (
+                      <span>{item.retention || '112%'} NRR</span>
+                    )}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            className="preset-card preset-card-add"
+            onClick={onOpenCustomModal}
+            title="Register a custom private or public company"
+          >
+            <div className="preset-add-icon">
+              <Plus size={16} />
+            </div>
+            <div className="preset-details">
+              <span className="preset-name">+ Add Target</span>
+              <span className="preset-sector">Custom company diligence</span>
+            </div>
           </button>
         </div>
       </div>
@@ -285,7 +1017,7 @@ export default function MarketBriefView({
       <AgentMonitor
         status={agentStatus}
         logs={agentLogs}
-        knowledgeBaseCount={(knowledgeBase || []).filter(k => k.enabled).length}
+        kbCount={(knowledgeBase || []).filter(k => k.enabled).length}
         skillsCount={(skills || []).filter(s => s.enabled).length}
       />
 
@@ -293,9 +1025,9 @@ export default function MarketBriefView({
       <div className="tabs-list" role="tablist">
         {[
           { id: 'analysis', num: '1', label: 'Company & Market' },
-          { id: 'comps', num: '2', label: 'Precedent Deals' },
-          { id: 'brief', num: '3', label: 'Institutional Brief' },
-          { id: 'chat', num: '4', label: 'Agent Copilot' }
+          { id: 'comps', num: '2', label: 'Precedent Deals', count: `${selectedDeals.length}` },
+          { id: 'brief', num: '3', label: 'Institutional Brief', isReady: Boolean(generatedReportMarkdown) },
+          { id: 'chat', num: '4', label: 'Agent Copilot', count: chatMessages.length > 0 ? `${chatMessages.length}` : null }
         ].map((item) => (
           <button
             key={item.id}
@@ -306,6 +1038,12 @@ export default function MarketBriefView({
           >
             <span className="tabs-trigger-step">{item.num}</span>
             <span>{item.label}</span>
+            {item.count && (
+              <span className="badge badge-secondary tabs-count-pill">{item.count}</span>
+            )}
+            {item.isReady && (
+              <span className="tabs-status-dot dot-green" title="Report synthesized & retained" />
+            )}
           </button>
         ))}
       </div>
@@ -320,25 +1058,33 @@ export default function MarketBriefView({
                 <div className="card-header-row">
                   <div>
                     <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'hsl(var(--muted-foreground))' }}>
-                      STEP 01 · TARGET PROFILE
+                      STEP 01 · TARGET PROFILE & SCENARIOS
                     </span>
                     <h2 className="card-title">Target Company Intelligence</h2>
-                    <p className="card-description">Select an industry preset or create any custom target profile for the agent to analyze.</p>
+                    <p className="card-description">Fine-tune target metrics or run instant sensitivity scenarios. All changes auto-save per target.</p>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={onOpenCustomModal}
-                  >
-                    <Plus size={13} />
-                    <span>New Target</span>
-                  </button>
+
+                  <div className="card-header-actions-inline">
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={onOpenCustomModal}
+                    >
+                      <Plus size={13} />
+                      <span>New Target</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
               {/* Company Selector Header */}
               <div className="company-selector-bar">
-                <div className="company-mark">{seller?.initials || 'CO'}</div>
+                <div
+                  className="company-mark"
+                  style={{ background: getSectorGradient(seller?.sector) }}
+                >
+                  {seller?.initials || 'CO'}
+                </div>
                 <div className="company-info-flex">
                   <div className="select-wrapper">
                     <select
@@ -360,17 +1106,53 @@ export default function MarketBriefView({
               </div>
 
               {seller?.website && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.5rem', background: 'hsl(var(--muted) / 0.3)', borderBottom: '1px solid hsl(var(--border))', fontSize: '0.8125rem' }}>
+                <div className="domain-bar">
                   <Globe size={13} />
                   <span>Domain: <strong>{seller.website}</strong></span>
+                  {seller?.notes && (
+                    <span className="domain-notes">· Diligence note: {seller.notes}</span>
+                  )}
                 </div>
               )}
 
-              {/* Financial Metrics Inputs */}
+              {/* Scenario Sensitivity Toolbar */}
+              <div className="scenario-toolbar">
+                <div className="scenario-toolbar-label">
+                  <Sliders size={13} />
+                  <span>Quick Sensitivity Scenarios:</span>
+                </div>
+                <div className="scenario-chips-group">
+                  <button
+                    type="button"
+                    className={`scenario-chip ${activeScenario === 'conservative' ? 'active' : ''}`}
+                    onClick={() => handleApplyScenario('conservative')}
+                  >
+                    <span>Conservative (Bear)</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`scenario-chip ${activeScenario === 'base' ? 'active' : ''}`}
+                    onClick={() => handleApplyScenario('base')}
+                  >
+                    <span>Base Case (Central)</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`scenario-chip ${activeScenario === 'aggressive' ? 'active' : ''}`}
+                    onClick={() => handleApplyScenario('aggressive')}
+                  >
+                    <span>Aggressive (Bull)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Financial Metrics Inputs with Steppers & Sliders */}
               <div className="metrics-fields-grid">
                 <div className="form-field">
-                  <label className="form-label">Sector / Vertical</label>
-                  <div style={{ display: 'flex', alignItems: 'center', height: '2.25rem', fontSize: '0.875rem', fontWeight: 600 }}>
+                  <div className="metric-label-row">
+                    <label className="form-label">Sector / Vertical</label>
+                  </div>
+                  <div className="sector-display-badge">
                     {sector}
                   </div>
                   <span className="form-hint">Target industry benchmark</span>
@@ -381,17 +1163,24 @@ export default function MarketBriefView({
                   value={revenue}
                   suffix="$M"
                   hint="Base for EV/Revenue calculations"
-                  onChange={invalidateDraft(setRevenue)}
-                  step="0.1"
+                  onChange={invalidateDraft(setRevenue, 'revenue')}
+                  onStep={(delta) => stepMetric(setRevenue, revenue, delta, 'revenue')}
+                  step={1}
+                  min={1}
+                  max={500}
                 />
 
                 <MetricInput
                   label="YoY Revenue Growth"
                   value={growth}
                   suffix="%"
-                  hint="Compound growth rate indicator"
-                  onChange={invalidateDraft(setGrowth)}
-                  step="0.1"
+                  hint="Compound growth velocity"
+                  onChange={invalidateDraft(setGrowth, 'growth')}
+                  onStep={(delta) => stepMetric(setGrowth, growth, delta, 'growth')}
+                  step={5}
+                  min={0}
+                  max={150}
+                  showSlider={true}
                 />
 
                 <MetricInput
@@ -399,8 +1188,12 @@ export default function MarketBriefView({
                   value={margin}
                   suffix="%"
                   hint="Operating cash profitability margin"
-                  onChange={invalidateDraft(setMargin)}
-                  step="0.1"
+                  onChange={invalidateDraft(setMargin, 'margin')}
+                  onStep={(delta) => stepMetric(setMargin, margin, delta, 'margin')}
+                  step={2}
+                  min={-20}
+                  max={60}
+                  showSlider={true}
                 />
 
                 <MetricInput
@@ -408,9 +1201,11 @@ export default function MarketBriefView({
                   value={netDebt}
                   suffix="$M"
                   hint="Bridge from Enterprise to Equity Value"
-                  onChange={invalidateDraft(setNetDebt)}
-                  step="0.1"
-                  min="-100000"
+                  onChange={invalidateDraft(setNetDebt, 'netDebt')}
+                  onStep={(delta) => stepMetric(setNetDebt, netDebt, delta, 'netDebt')}
+                  step={1}
+                  min={-100}
+                  max={200}
                 />
 
                 <MetricInput
@@ -418,18 +1213,16 @@ export default function MarketBriefView({
                   value={retention}
                   suffix="%"
                   hint="Cohort expansion & customer health"
-                  onChange={invalidateDraft(setRetention)}
-                  step="0.1"
+                  onChange={invalidateDraft(setRetention, 'retention')}
+                  onStep={(delta) => stepMetric(setRetention, retention, delta, 'retention')}
+                  step={2}
+                  min={70}
+                  max={160}
                 />
               </div>
 
-              <div className="card-footer" style={{ fontSize: '0.8125rem', gap: '0.5rem', color: 'hsl(var(--muted-foreground))' }}>
-                <ShieldCheck size={15} style={{ color: 'hsl(var(--primary))' }} />
-                <span>
-                  Rule of 40 Benchmark: <strong>{(growth + margin).toFixed(1)}%</strong> ({growth}% growth + {margin}% EBITDA).
-                  {growth + margin >= 40 ? ' Top-quartile asset performance.' : ' Moderate growth-profitability balance.'}
-                </span>
-              </div>
+              {/* Rule of 40 Visual Gauge */}
+              <RuleOf40Gauge growth={Number(growth) || 0} margin={Number(margin) || 0} />
             </div>
 
             {/* Step 2 Market Signals Card */}
@@ -467,11 +1260,26 @@ export default function MarketBriefView({
                   </ul>
                 </div>
               </div>
+
+              <div className="card-footer" style={{ justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.8125rem', color: 'hsl(var(--muted-foreground))' }}>
+                  Target intelligence calibrated. Proceed to precedent deals.
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setActiveTab('comps')}
+                >
+                  <span>Continue to Precedent Comps</span>
+                  <ArrowRight size={13} />
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Right Column: Indicative Valuation Corridor & Grounding */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {/* Visual Football Field Valuation Chart */}
             <div className="card">
               <div className="card-header">
                 <div className="card-header-row">
@@ -486,18 +1294,27 @@ export default function MarketBriefView({
                 </div>
               </div>
 
+              {/* The Football Field Visualizer */}
+              <ValuationFootballField
+                revenue={Number(revenue) || 0}
+                lowMultiple={lowMultiple}
+                referenceMultiple={referenceMultiple}
+                highMultiple={highMultiple}
+                netDebt={Number(netDebt) || 0}
+              />
+
               <div className="range-cases-column">
                 {valuationCases.map(item => {
                   const Icon = item.icon;
-                  const enterpriseValue = revenue * item.multiple;
-                  const equityValue = enterpriseValue - netDebt;
+                  const enterpriseValue = (revenue || 0) * item.multiple;
+                  const equityValue = enterpriseValue - (netDebt || 0);
                   return (
                     <div key={item.key} className={`range-case-card ${item.key === 'base' ? 'case-teal' : ''}`}>
                       <div className="range-case-top">
                         <span style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
                           <Icon size={14} /> {item.label}
                         </span>
-                        <span>{item.multiple ? `${item.multiple.toFixed(1)}x EV/Rev` : '—'}</span>
+                        <span className="badge badge-outline">{item.multiple ? `${item.multiple.toFixed(1)}x EV/Rev` : '—'}</span>
                       </div>
                       <div className="range-case-val">{money(enterpriseValue)}</div>
                       <div className="range-case-equity">
@@ -566,81 +1383,282 @@ export default function MarketBriefView({
 
       {/* TAB 2: Precedent Deal Comparables */}
       {activeTab === 'comps' && (
-        <div className="card">
-          <div className="card-header">
-            <div className="card-header-row">
-              <div>
-                <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'hsl(var(--muted-foreground))' }}>
-                  STEP 02 · PRECEDENT TRANSACTIONS
-                </span>
-                <h2 className="card-title">M&A Deal Comparables & Multiples Benchmark</h2>
-                <p className="card-description">Toggle transactions to calibrate the benchmark multiple corridor for {companyName}.</p>
-              </div>
-              <span className="badge badge-secondary">{selectedDeals.length} of {activeDeals.length} Selected</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {/* 4 Summary Metric Tiles */}
+          <div className="comps-kpi-grid">
+            <div className="kpi-card">
+              <span className="kpi-label">Median Multiple</span>
+              <strong className="kpi-value text-emerald-500">{compsSummary.medianMultiple.toFixed(1)}x</strong>
+              <small className="kpi-sub">EV / LTM Revenue</small>
+            </div>
+            <div className="kpi-card">
+              <span className="kpi-label">Multiple Range</span>
+              <strong className="kpi-value">{lowMultiple.toFixed(1)}x – {highMultiple.toFixed(1)}x</strong>
+              <small className="kpi-sub">Interquartile corridor</small>
+            </div>
+            <div className="kpi-card">
+              <span className="kpi-label">Median EV/EBITDA</span>
+              <strong className="kpi-value">{compsSummary.medianEbitda ? `${compsSummary.medianEbitda.toFixed(1)}x` : '22.0x'}</strong>
+              <small className="kpi-sub">Operating cashflow multiple</small>
+            </div>
+            <div className="kpi-card">
+              <span className="kpi-label">Total Volume</span>
+              <strong className="kpi-value">{money(compsSummary.totalVolume)}</strong>
+              <small className="kpi-sub">{selectedDeals.length} deals benchmarked</small>
             </div>
           </div>
 
-          <div className="table-wrapper">
-            <table className="shadcn-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 40, textAlign: 'center' }}>Use</th>
-                  <th>Target Company</th>
-                  <th>Acquirer / Buyer</th>
-                  <th>Close Date</th>
-                  <th>Enterprise Value</th>
-                  <th>Revenue</th>
-                  <th>EV / Revenue</th>
-                  <th>EV / EBITDA</th>
-                  <th>Strategic Rationale</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeDeals.map(deal => (
-                  <tr key={deal.id} className={includedDeals.includes(deal.id) ? 'is-selected' : ''}>
-                    <td style={{ textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        aria-label={`Include transaction ${deal.name}`}
-                        checked={includedDeals.includes(deal.id)}
-                        onChange={() => toggleDeal(deal.id)}
-                      />
-                    </td>
-                    <td>
-                      <strong>{deal.name}</strong>
-                      <div style={{ fontSize: '0.6875rem', color: 'hsl(var(--muted-foreground))' }}>{sector}</div>
-                    </td>
-                    <td>{deal.buyer}</td>
-                    <td>{deal.date}</td>
-                    <td>{money(deal.ev)}</td>
-                    <td>{money(deal.revenue)}</td>
-                    <td>
-                      <span className="badge badge-outline" style={{ fontWeight: 700 }}>
-                        {deal.multiple.toFixed(1)}x
-                      </span>
-                    </td>
-                    <td>{deal.ebitdaMultiple ? `${deal.ebitdaMultiple.toFixed(1)}x` : '—'}</td>
-                    <td style={{ maxWidth: 260, color: 'hsl(var(--muted-foreground))', fontSize: '0.75rem' }}>
-                      {deal.rationale}
-                    </td>
+          <div className="card">
+            <div className="card-header">
+              <div className="card-header-row">
+                <div>
+                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'hsl(var(--muted-foreground))' }}>
+                    STEP 02 · PRECEDENT TRANSACTIONS
+                  </span>
+                  <h2 className="card-title">M&A Deal Comparables & Multiples Benchmark</h2>
+                  <p className="card-description">Toggle transactions to calibrate the benchmark multiple corridor for {companyName}.</p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setIsAddDealOpen(true)}
+                  >
+                    <Plus size={13} />
+                    <span>Add Custom Deal</span>
+                  </button>
+                  <span className="badge badge-secondary">{selectedDeals.length} of {activeDeals.length} Selected</span>
+                </div>
+              </div>
+
+              {/* Search & Bulk Selection Toolbar */}
+              <div className="comps-filter-bar">
+                <div className="comps-search-wrap">
+                  <Search size={14} className="comps-search-icon" />
+                  <input
+                    type="text"
+                    className="comps-search-input"
+                    placeholder="Search target company, buyer, or rationale..."
+                    value={compSearch}
+                    onChange={e => setCompSearch(e.target.value)}
+                  />
+                  {compSearch && (
+                    <button
+                      type="button"
+                      className="btn-ghost btn-icon btn-sm"
+                      onClick={() => setCompSearch('')}
+                      style={{ height: '1.5rem', width: '1.5rem' }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <div className="comps-bulk-actions">
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => toggleAllDeals(true)}
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => toggleAllDeals(false)}
+                  >
+                    Deselect All
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="table-wrapper">
+              <table className="shadcn-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 40, textAlign: 'center' }}>Use</th>
+                    <th onClick={() => handleSort('name')} className="sortable-th">
+                      <span>Target Company</span>
+                      <ChevronsUpDown size={12} />
+                    </th>
+                    <th onClick={() => handleSort('buyer')} className="sortable-th">
+                      <span>Acquirer / Buyer</span>
+                      <ChevronsUpDown size={12} />
+                    </th>
+                    <th onClick={() => handleSort('date')} className="sortable-th">
+                      <span>Close Date</span>
+                      <ChevronsUpDown size={12} />
+                    </th>
+                    <th onClick={() => handleSort('ev')} className="sortable-th">
+                      <span>Enterprise Value</span>
+                      <ChevronsUpDown size={12} />
+                    </th>
+                    <th onClick={() => handleSort('revenue')} className="sortable-th">
+                      <span>Revenue</span>
+                      <ChevronsUpDown size={12} />
+                    </th>
+                    <th onClick={() => handleSort('multiple')} className="sortable-th">
+                      <span>EV / Revenue</span>
+                      <ChevronsUpDown size={12} />
+                    </th>
+                    <th>EV / EBITDA</th>
+                    <th>Strategic Rationale</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {displayedDeals.map(deal => (
+                    <tr key={deal.id} className={includedDeals.includes(deal.id) ? 'is-selected' : ''}>
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Include transaction ${deal.name}`}
+                          checked={includedDeals.includes(deal.id)}
+                          onChange={() => toggleDeal(deal.id)}
+                        />
+                      </td>
+                      <td>
+                        <strong>{deal.name}</strong>
+                        <div style={{ fontSize: '0.6875rem', color: 'hsl(var(--muted-foreground))' }}>{sector}</div>
+                      </td>
+                      <td>{deal.buyer}</td>
+                      <td>{deal.date}</td>
+                      <td>{money(deal.ev)}</td>
+                      <td>{money(deal.revenue)}</td>
+                      <td>
+                        <span className="badge badge-outline" style={{ fontWeight: 700 }}>
+                          {deal.multiple.toFixed(1)}x
+                        </span>
+                      </td>
+                      <td>{deal.ebitdaMultiple ? `${deal.ebitdaMultiple.toFixed(1)}x` : '—'}</td>
+                      <td style={{ maxWidth: 260, color: 'hsl(var(--muted-foreground))', fontSize: '0.75rem' }}>
+                        {deal.rationale}
+                      </td>
+                    </tr>
+                  ))}
+                  {displayedDeals.length === 0 && (
+                    <tr>
+                      <td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'hsl(var(--muted-foreground))' }}>
+                        No transactions matched your search query. Try clearing filters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="card-footer" style={{ justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.8125rem', color: 'hsl(var(--muted-foreground))' }}>
+                Selected Range: <strong>{lowMultiple.toFixed(1)}x – {highMultiple.toFixed(1)}x EV/Revenue</strong> (Median: <strong>{referenceMultiple.toFixed(1)}x</strong>).
+              </span>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setActiveTab('analysis')}
+                >
+                  Back to Metrics
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setActiveTab('brief')}
+                >
+                  <span>Continue to Institutional Brief</span>
+                  <ArrowRight size={13} />
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div className="card-footer" style={{ justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.8125rem', color: 'hsl(var(--muted-foreground))' }}>
-              Selected Range: <strong>{lowMultiple.toFixed(1)}x – {highMultiple.toFixed(1)}x EV/Revenue</strong> (Median: <strong>{referenceMultiple.toFixed(1)}x</strong>).
-            </span>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setActiveTab('analysis')}
-            >
-              Apply Range to Valuation
-            </button>
-          </div>
+          {/* Add Custom Deal Modal */}
+          {isAddDealOpen && (
+            <div className="modal-overlay" onClick={() => setIsAddDealOpen(false)} role="dialog" aria-modal="true">
+              <div className="modal-content" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                  <div>
+                    <h3 className="modal-title">Add Precedent Transaction</h3>
+                    <p className="modal-description">Inject a verified M&A transaction into the valuation comp set</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm btn-icon"
+                    onClick={() => setIsAddDealOpen(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <form onSubmit={handleAddCustomDeal}>
+                  <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+                    <div className="form-field">
+                      <label className="form-label">Target Asset Name *</label>
+                      <input
+                        type="text"
+                        required
+                        className="input-wrapper"
+                        style={{ padding: '0 0.75rem' }}
+                        placeholder="e.g. CloudSync Software"
+                        value={newDealForm.name}
+                        onChange={e => setNewDealForm({ ...newDealForm, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">Acquirer / Buyer *</label>
+                      <input
+                        type="text"
+                        required
+                        className="input-wrapper"
+                        style={{ padding: '0 0.75rem' }}
+                        placeholder="e.g. Vista Equity / Salesforce"
+                        value={newDealForm.buyer}
+                        onChange={e => setNewDealForm({ ...newDealForm, buyer: e.target.value })}
+                      />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                      <div className="form-field">
+                        <label className="form-label">Enterprise Value ($M)</label>
+                        <input
+                          type="number"
+                          className="input-wrapper"
+                          style={{ padding: '0 0.75rem' }}
+                          value={newDealForm.ev}
+                          onChange={e => setNewDealForm({ ...newDealForm, ev: Number(e.target.value) })}
+                        />
+                      </div>
+                      <div className="form-field">
+                        <label className="form-label">Revenue ($M)</label>
+                        <input
+                          type="number"
+                          className="input-wrapper"
+                          style={{ padding: '0 0.75rem' }}
+                          value={newDealForm.revenue}
+                          onChange={e => setNewDealForm({ ...newDealForm, revenue: Number(e.target.value) })}
+                        />
+                      </div>
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">Strategic Deal Rationale</label>
+                      <textarea
+                        className="input-textarea"
+                        rows={2}
+                        placeholder="Synergies, customer consolidation, geographic expansion..."
+                        value={newDealForm.rationale}
+                        onChange={e => setNewDealForm({ ...newDealForm, rationale: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button type="button" className="btn btn-outline" onClick={() => setIsAddDealOpen(false)}>
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary">
+                      Add to Comps Database
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -648,26 +1666,39 @@ export default function MarketBriefView({
       {activeTab === 'brief' && (
         <div className="report-view-wrapper">
           {agentStatus === 'idle' && !generatedReportMarkdown ? (
-            <div className="card" style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-              <Sparkles size={32} style={{ margin: '0 auto 1rem', color: 'hsl(var(--primary))' }} />
-              <h2 className="card-title" style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>
+            <div className="card empty-report-card">
+              <div className="empty-report-icon-wrap">
+                <Sparkles size={36} className="text-emerald-500" />
+              </div>
+              <h2 className="card-title" style={{ fontSize: '1.375rem', marginBottom: '0.5rem' }}>
                 Generate Institutional Valuation Report
               </h2>
-              <p className="card-description" style={{ maxWidth: 480, margin: '0 auto 1.5rem' }}>
-                Dispatch autonomous AI agents to explore public company data for <strong>{companyName}</strong>, benchmark precedent transactions in <strong>{sector}</strong>, and synthesize an institutional M&A brief.
+              <p className="card-description" style={{ maxWidth: 520, margin: '0 auto 1.75rem' }}>
+                Synthesize an exhaustive 8-section investment banking M&A memorandum for <strong>{companyName}</strong> using precedent deal benchmarks and market research. Reports are saved and retained per company.
               </p>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={runAgentResearch}
-              >
-                <Sparkles size={14} />
-                <span>Run Agent Research & Generate Report</span>
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={runAgentResearch}
+                >
+                  <Sparkles size={14} />
+                  <span>Run Live AI Agent Research</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={loadInstantSampleBrief}
+                  title="Loads a fully prepared institutional report instantaneously"
+                >
+                  <FileText size={14} />
+                  <span>Load Instant Sample Brief</span>
+                </button>
+              </div>
             </div>
           ) : agentStatus === 'running' && !generatedReportMarkdown ? (
-            <div className="card" style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-              <Sparkles size={32} className="spin-slow" style={{ margin: '0 auto 1rem', color: 'hsl(var(--primary))' }} />
+            <div className="card empty-report-card">
+              <Sparkles size={36} className="spin-slow text-emerald-500" style={{ margin: '0 auto 1rem' }} />
               <h2 className="card-title" style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>
                 AI Agents Researching & Synthesizing...
               </h2>
@@ -696,7 +1727,7 @@ export default function MarketBriefView({
                     {valuationCases.map(item => (
                       <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
                         <span style={{ color: 'hsl(var(--muted-foreground))' }}>{item.label}:</span>
-                        <strong>{money(revenue * item.multiple)} ({item.multiple.toFixed(1)}x)</strong>
+                        <strong>{money((revenue || 0) * item.multiple)} ({item.multiple.toFixed(1)}x)</strong>
                       </div>
                     ))}
                   </div>
@@ -713,16 +1744,16 @@ export default function MarketBriefView({
                   <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.8125rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'hsl(var(--muted-foreground))' }}>Central Enterprise Value:</span>
-                      <strong>{money(revenue * referenceMultiple)}</strong>
+                      <strong>{money((revenue || 0) * referenceMultiple)}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: 'hsl(var(--muted-foreground))' }}>
                       <span>Less Net Debt:</span>
-                      <strong>− {money(netDebt)}</strong>
+                      <strong>− {money(netDebt || 0)}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.375rem', borderTop: '1px solid hsl(var(--border))', fontWeight: 600 }}>
                       <span>Indicative Equity Value:</span>
                       <strong style={{ color: 'hsl(var(--emerald))' }}>
-                        {money(revenue * referenceMultiple - netDebt)}
+                        {money((revenue || 0) * referenceMultiple - (netDebt || 0))}
                       </strong>
                     </div>
                   </div>
@@ -736,7 +1767,7 @@ export default function MarketBriefView({
                         <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'hsl(var(--muted-foreground))' }}>
                           GOVERNANCE GATE
                         </span>
-                        <h3 className="card-title" style={{ fontSize: '0.9375rem' }}>Banker Review</h3>
+                        <h3 className="card-title" style={{ fontSize: '0.9375rem' }}>Banker Review ({reviewCheckCount}/3)</h3>
                       </div>
                       <span className={`badge ${reviewed ? 'badge-success' : 'badge-outline'}`} style={{ fontSize: '0.6875rem' }}>
                         {reviewed ? 'Approved' : 'Pending'}
@@ -788,8 +1819,8 @@ export default function MarketBriefView({
                 </div>
               </div>
 
-              {/* Action Toolbar */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              {/* Action Toolbar & Reader Comfort Controls */}
+              <div className="report-action-toolbar">
                 <div>
                   <h2 style={{ fontSize: '1.25rem', fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>
                     {companyName} — Institutional Valuation Brief
@@ -798,7 +1829,29 @@ export default function MarketBriefView({
                     {sector} · Autonomous M&A Deal Intelligence Brief · Layout: {(reportLayouts.find(l => l.id === activeLayoutId)?.name) || 'Standard M&A'}
                   </p>
                 </div>
+
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {/* Reading Comfort & Presentation Controls */}
+                  <button
+                    type="button"
+                    className={`btn btn-outline btn-sm ${isPresentationMode ? 'active' : ''}`}
+                    onClick={() => setIsPresentationMode(!isPresentationMode)}
+                    title="Toggle Full Width Presentation View"
+                  >
+                    {isPresentationMode ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                    <span>{isPresentationMode ? 'Compact' : 'Full Width'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setReportZoom(prev => prev === 'normal' ? 'large' : 'normal')}
+                    title="Toggle Text Size"
+                  >
+                    {reportZoom === 'normal' ? <ZoomIn size={13} /> : <ZoomOut size={13} />}
+                    <span>{reportZoom === 'normal' ? 'Large Text' : 'Normal Text'}</span>
+                  </button>
+
                   <button
                     type="button"
                     className="btn btn-outline btn-sm"
@@ -808,6 +1861,7 @@ export default function MarketBriefView({
                     <LayoutTemplate size={13} />
                     <span>Layout: {(reportLayouts.find(l => l.id === activeLayoutId)?.name) || 'Standard'}</span>
                   </button>
+
                   <button
                     type="button"
                     className="btn btn-outline btn-sm"
@@ -817,6 +1871,7 @@ export default function MarketBriefView({
                     <Copy size={13} />
                     <span>Copy Text</span>
                   </button>
+
                   <button
                     type="button"
                     className="btn btn-outline btn-sm"
@@ -826,9 +1881,10 @@ export default function MarketBriefView({
                     <Download size={13} />
                     <span>Export MD</span>
                   </button>
+
                   <button
                     type="button"
-                    className="btn btn-outline btn-sm"
+                    className="btn btn-primary btn-sm"
                     onClick={printReport}
                     title="Print report or save as PDF"
                   >
@@ -838,11 +1894,48 @@ export default function MarketBriefView({
                 </div>
               </div>
 
-              {/* The Institutional Document Sheet (Standard Institutional Width, Clean Typography) */}
-              <article className="report-sheet">
+              {/* Sticky Section Table of Contents Pills */}
+              <div className="section-toc-bar" role="navigation" aria-label="Report Table of Contents">
+                <span className="toc-title">Jump to Section:</span>
+                {[
+                  { label: '1. Exec Summary', id: 'section-1' },
+                  { label: '2. Profile', id: 'section-2' },
+                  { label: '3. Financials', id: 'section-3' },
+                  { label: '4. Market Dynamics', id: 'section-4' },
+                  { label: '5. Precedent Deals', id: 'section-5' },
+                  { label: '6. Valuation Corridor', id: 'section-6' },
+                  { label: '7. Buyer Universe', id: 'section-7' },
+                  { label: '8. Due Diligence', id: 'section-8' }
+                ].map((s, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className="toc-pill"
+                    onClick={() => {
+                      const headings = document.querySelectorAll('.prose-report h2');
+                      if (headings[idx]) {
+                        headings[idx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* The Institutional Document Sheet */}
+              <article className={`report-sheet ${isPresentationMode ? 'presentation-mode' : ''} ${reportZoom === 'large' ? 'text-large' : ''}`}>
                 <div className="report-header">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
-                    <div className="company-mark" style={{ width: '2.5rem', height: '2.5rem', fontSize: '0.875rem' }}>
+                    <div
+                      className="company-mark"
+                      style={{
+                        width: '2.5rem',
+                        height: '2.5rem',
+                        fontSize: '0.875rem',
+                        background: getSectorGradient(seller?.sector)
+                      }}
+                    >
                       {seller?.initials || 'MB'}
                     </div>
                     <div>
@@ -897,18 +1990,41 @@ export default function MarketBriefView({
                   <span>Layout: {(reportLayouts.find(l => l.id === activeLayoutId)?.name) || 'Institutional'} · Status: {reviewed ? 'Banker Approved' : 'Draft'}</span>
                 </div>
               </article>
+
+              {/* Bottom Navigation CTA */}
+              <div className="brief-bottom-nav">
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setActiveTab('comps')}
+                >
+                  ← Back to Comps
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setActiveTab('chat')}
+                >
+                  <span>Consult Deal Copilot</span>
+                  <MessageSquare size={14} />
+                </button>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* TAB 4: Deal Intelligence Copilot & Chat */}
+      {/* TAB 4: Deal Intelligence Copilot & Chat with Retained Context */}
       {activeTab === 'chat' && (
         <AgentChatView
           company={seller}
           financials={{ revenue, growth, margin, retention, netDebt }}
           comparableDeals={selectedDeals}
           knowledgeBase={knowledgeBase}
+          skills={skills}
+          researchReport={generatedReportMarkdown}
+          chatMessages={chatMessages}
+          onUpdateChatMessages={handleUpdateChatMessages}
           apiKey={aiSettings?.keys?.[aiSettings?.activeProvider] || apiKey}
           providerId={aiSettings?.activeProvider || 'gemini'}
           modelId={aiSettings?.models?.[aiSettings?.activeProvider] || ''}
@@ -958,4 +2074,3 @@ function renderMarkdown(md) {
     return `<p>${md}</p>`;
   }
 }
-

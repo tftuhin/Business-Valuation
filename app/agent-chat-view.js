@@ -1,41 +1,66 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Send, Bot, User, Sparkles, Copy, Check, RotateCcw,
-  BookOpen, Zap, AlertCircle, TrendingUp, Building2, ShieldCheck
+  BookOpen, Zap, AlertCircle, TrendingUp, Building2, ShieldCheck,
+  BarChart3, Users, DollarSign, Layers, FileText
 } from 'lucide-react';
 import { marked } from 'marked';
 
 export default function AgentChatView({
   company = {},
+  financials = {},
   comparableDeals = [],
   knowledgeBase = [],
   skills = [],
+  researchReport = '',
+  chatMessages = [],
+  onUpdateChatMessages = () => {},
   apiKey = '',
   providerId = 'gemini',
   modelId = '',
   aiSettings = null,
   onToast = () => {}
 }) {
-  const [messages, setMessages] = useState([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: `Hello! I am your **Autonomous Deal Intelligence & Valuation Agent** for **${company?.name || 'Target Company'}**.
+  const welcomeMessage = useMemo(() => ({
+    id: `welcome-${company?.id || 'target'}`,
+    role: 'assistant',
+    content: `Hello! I am your **Autonomous Deal Intelligence & Valuation Agent** for **${company?.name || 'Target Company'}**.
 
 I have full operational awareness of:
-- **Financial Profile:** $${company?.revenue || '28M'} LTM Revenue, ${company?.growth || '34%'} YoY Growth, ${company?.margin || '19%'} EBITDA Margin, ${company?.retention || '114%'} NRR.
-- **Precedent M&A Benchmark Deals:** ${comparableDeals.length} precedent sector transactions loaded.
+- **Target Financial Profile:** $${financials?.revenue || company?.revenue || '28M'} LTM Revenue, ${financials?.growth || company?.growth || '34%'} YoY Growth, ${financials?.margin || company?.margin || '19%'} EBITDA Margin, ${financials?.retention || company?.retention || '114%'} NRR.
+- **Precedent M&A Benchmark Deals:** ${comparableDeals.length} precedent sector transactions calibrated.
+- **Research Status:** ${researchReport ? 'Institutional valuation brief synthesized & loaded into memory.' : 'Ready to analyze market signals and run valuation scenarios.'}
 - **Active Context:** ${(knowledgeBase || []).filter(k => k.enabled).length} Knowledge Base document(s) and ${(skills || []).filter(s => s.enabled).length} active Agent Skill(s).
 
-How can I assist your diligence or valuation analysis today? Select a prompt below or type any custom query.`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }
+How can I assist your diligence or valuation analysis today? Select a categorized prompt below or type any custom query.`,
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }), [
+    company?.id,
+    company?.name,
+    company?.revenue,
+    company?.growth,
+    company?.margin,
+    company?.retention,
+    financials?.revenue,
+    financials?.growth,
+    financials?.margin,
+    financials?.retention,
+    comparableDeals.length,
+    Boolean(researchReport),
+    knowledgeBase,
+    skills
   ]);
+
+  const activeMessages = (Array.isArray(chatMessages) && chatMessages.length > 0)
+    ? chatMessages
+    : [welcomeMessage];
+
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  const [activeCategory, setActiveCategory] = useState('all');
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -44,15 +69,30 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
+  }, [activeMessages.length, isLoading]);
 
-  const quickPrompts = [
-    'What are the biggest diligence red flags?',
-    'Analyze top 3 strategic buyer synergies',
-    'How sensitive is EV to growth slowing to 20%?',
-    'Draft a confidential teaser email to PE sponsors',
-    'Explain the Rule of 40 score compared to peers'
+  const promptCategories = [
+    { id: 'all', label: 'All Starters' },
+    { id: 'valuation', label: 'Valuation & Multiples', icon: BarChart3 },
+    { id: 'diligence', label: 'Diligence & Risks', icon: AlertCircle },
+    { id: 'synergy', label: 'Buyer Synergy', icon: Users },
+    { id: 'materials', label: 'IC & PE Teaser', icon: Layers }
   ];
+
+  const categorizedPrompts = [
+    { cat: 'valuation', text: 'How sensitive is Enterprise Value to growth slowing to 20%?' },
+    { cat: 'valuation', text: 'Explain the Rule of 40 score compared to peer transaction medians' },
+    { cat: 'diligence', text: 'What are the top 3 diligence red flags to audit before LOI?' },
+    { cat: 'diligence', text: 'How should we audit customer concentration and cohort churn?' },
+    { cat: 'synergy', text: 'Analyze top strategic consolidator synergies in this vertical' },
+    { cat: 'synergy', text: 'Estimate 3-year SG&A cost rationalization potential' },
+    { cat: 'materials', text: 'Draft a confidential 1-page executive teaser for PE sponsors' },
+    { cat: 'materials', text: 'Draft 5 Investment Committee thesis bullets with key risks' }
+  ];
+
+  const displayedPrompts = activeCategory === 'all'
+    ? categorizedPrompts
+    : categorizedPrompts.filter(p => p.cat === activeCategory);
 
   const handleSend = async (textToSend) => {
     const text = (textToSend || input).trim();
@@ -65,8 +105,8 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    const nextMessages = [...messages, userMessage];
-    setMessages(nextMessages);
+    const nextMessages = [...activeMessages, userMessage];
+    onUpdateChatMessages(nextMessages);
     setInput('');
     setIsLoading(true);
 
@@ -76,10 +116,14 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: nextMessages,
-          company,
+          company: {
+            ...company,
+            ...financials
+          },
           comparableDeals,
           knowledgeBase,
           skills,
+          researchReport, // Ingest full retained research brief into AI context
           apiKey: aiSettings?.keys?.[aiSettings?.activeProvider] || apiKey,
           providerId: aiSettings?.activeProvider || providerId || 'gemini',
           modelId: aiSettings?.models?.[aiSettings?.activeProvider] || modelId
@@ -98,7 +142,8 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
           citations: data.citations || [],
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
-        setMessages(prev => [...prev, agentMessage]);
+        const updatedMessages = [...nextMessages, agentMessage];
+        onUpdateChatMessages(updatedMessages);
       } else {
         throw new Error(data.error || 'Failed to get agent response');
       }
@@ -107,10 +152,11 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
       const errorMessage = {
         id: `err-${Date.now()}`,
         role: 'assistant',
-        content: `**Advisory Notice:** Encountered an issue connecting to the inference pipeline (${err.message}). You can retry your query or check AI settings.`,
+        content: `**Advisory Notice:** Encountered an issue connecting to the inference pipeline (${err.message}). The domain intelligence engine is standing by with saved company research.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
-      setMessages(prev => [...prev, errorMessage]);
+      const updatedMessages = [...nextMessages, errorMessage];
+      onUpdateChatMessages(updatedMessages);
     } finally {
       setIsLoading(false);
     }
@@ -131,15 +177,8 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
   };
 
   const handleResetChat = () => {
-    setMessages([
-      {
-        id: `welcome-${Date.now()}`,
-        role: 'assistant',
-        content: `Session reset. Ready to analyze **${company?.name || 'Target Company'}** (${company?.sector || 'Enterprise Software'}). Ask any question about valuation, buyer fit, or diligence risks.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }
-    ]);
-    onToast('Conversation thread cleared.');
+    onUpdateChatMessages([]);
+    onToast(`Cleared conversation history for "${company?.name || 'Target'}".`);
   };
 
   const activeKbCount = (knowledgeBase || []).filter(k => k.enabled).length;
@@ -147,6 +186,37 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
 
   return (
     <div className="chat-container card">
+      {/* Target Context Banner */}
+      <div className="chat-context-strip">
+        <div className="chat-context-left">
+          <Building2 size={14} className="text-emerald-500" />
+          <strong>{company?.name || 'Target Asset'}</strong>
+          <span className="chat-context-divider">·</span>
+          <span>{company?.sector || 'Enterprise Software'}</span>
+          <span className="chat-context-divider">·</span>
+          <span className="badge badge-secondary" style={{ fontSize: '0.6875rem' }}>
+            ${financials?.revenue || company?.revenue || '28M'} Rev
+          </span>
+          <span className="badge badge-secondary" style={{ fontSize: '0.6875rem' }}>
+            {financials?.growth || company?.growth || '34%'} YoY
+          </span>
+          {researchReport && (
+            <span className="badge badge-success" style={{ fontSize: '0.6875rem', gap: '0.25rem' }}>
+              <FileText size={10} /> Valuation Brief Grounded
+            </span>
+          )}
+        </div>
+
+        <div className="chat-context-right">
+          <span className="badge badge-outline" style={{ fontSize: '0.6875rem' }}>
+            {aiSettings?.activeProvider ? `${aiSettings.activeProvider.toUpperCase()} Grounded` : 'Gemini AI'}
+          </span>
+          <span className="badge badge-secondary" style={{ fontSize: '0.6875rem' }}>
+            {activeMessages.length} Messages Retained
+          </span>
+        </div>
+      </div>
+
       {/* Chat Header */}
       <div className="chat-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -158,10 +228,10 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
               <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 600 }}>
                 Deal Intelligence Copilot
               </h3>
-              <span className="badge badge-success" style={{ fontSize: '0.625rem' }}>Online</span>
+              <span className="badge badge-success" style={{ fontSize: '0.625rem' }}>Company Memory Active</span>
             </div>
             <p style={{ margin: '0.125rem 0 0', fontSize: '0.75rem', color: 'hsl(var(--muted-foreground))' }}>
-              Interacting with {company?.name || 'Target'} ({company?.sector || 'Enterprise Software'})
+              Retains all conversations, precedent comps, and research context for {company?.name || 'this target'}
             </p>
           </div>
         </div>
@@ -178,18 +248,18 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
             type="button"
             className="btn btn-outline btn-sm"
             onClick={handleResetChat}
-            title="Reset conversation"
+            title={`Clear chat history for ${company?.name || 'this target'}`}
             style={{ height: '1.75rem', padding: '0 0.5rem' }}
           >
             <RotateCcw size={12} />
-            <span>Reset</span>
+            <span>Reset Target Chat</span>
           </button>
         </div>
       </div>
 
       {/* Message History Thread */}
       <div className="chat-messages">
-        {messages.map(msg => {
+        {activeMessages.map(msg => {
           const isUser = msg.role === 'user';
           return (
             <div
@@ -258,7 +328,7 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
             <div className="chat-bubble chat-bubble-assistant" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1rem' }}>
               <Sparkles size={14} className="spin-slow" style={{ color: 'hsl(var(--primary))' }} />
               <span style={{ fontSize: '0.8125rem', color: 'hsl(var(--muted-foreground))' }}>
-                Deal agent analyzing company data & knowledge base...
+                Deal agent synthesizing financial models & knowledge base...
               </span>
             </div>
           </div>
@@ -267,17 +337,31 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Categorized Prompt Selector */}
+      <div className="chat-category-nav">
+        {promptCategories.map(cat => (
+          <button
+            key={cat.id}
+            type="button"
+            className={`chat-category-btn ${activeCategory === cat.id ? 'active' : ''}`}
+            onClick={() => setActiveCategory(cat.id)}
+          >
+            {cat.label}
+          </button>
+        ))}
+      </div>
+
       {/* Suggested Quick Prompt Chips */}
       <div className="chat-quick-chips">
-        {quickPrompts.map((prompt, idx) => (
+        {displayedPrompts.map((item, idx) => (
           <button
             key={idx}
             type="button"
             className="chip-btn"
-            onClick={() => handleSend(prompt)}
+            onClick={() => handleSend(item.text)}
             disabled={isLoading}
           >
-            {prompt}
+            {item.text}
           </button>
         ))}
       </div>
@@ -289,7 +373,7 @@ How can I assist your diligence or valuation analysis today? Select a prompt bel
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={`Ask the agent anything about ${company?.name || 'the target'}, multiples, buyer synergy, or diligence... (Press Enter to send)`}
+          placeholder={`Ask the agent anything about ${company?.name || 'the target'}, multiples, buyer synergy, or diligence... (Enter to send)`}
           disabled={isLoading}
           className="chat-textarea"
         />

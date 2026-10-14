@@ -10,6 +10,7 @@ export async function POST(request) {
       comparableDeals = [],
       knowledgeBase = [],
       skills = [],
+      researchReport = '',
       apiKey: userApiKey,
       provider: requestedProvider,
       providerId: requestedProviderId,
@@ -42,7 +43,7 @@ export async function POST(request) {
     // Last user message
     const userPrompt = messages.length > 0 ? messages[messages.length - 1].content : 'Provide an executive summary of this target company.';
 
-    // Conversational prompt
+    // Conversational prompt with full retained research context
     const systemPrompt = `You are an elite Investment Banking Director and M&A Deal Advisory Agent.
 You are assisting an institutional user with in-depth evaluation and strategic advisory on:
 - Company: "${companyName}"
@@ -50,12 +51,14 @@ You are assisting an institutional user with in-depth evaluation and strategic a
 - Financial Metrics: LTM Revenue $${rev}M, YoY Growth ${gr}%, EBITDA Margin ${margin}%, Net Retention ${nrr}%, Net Debt $${netDebt}M.
 - Rule of 40 Score: ${(gr + margin).toFixed(1)}%
 
+${researchReport ? `CURRENT VALUATION REPORT & PREVIOUS RESEARCH WORK FOR THIS TARGET:\n${researchReport.slice(0, 5000)}\n\n` : ''}
 ${dealsContext ? `Precedent M&A Transactions in sector:\n${dealsContext}\n` : ''}
 ${activeKb.length > 0 ? `ACTIVE KNOWLEDGE BASE DOCUMENTS:\n${kbContext}\n` : ''}
 ${activeSkills.length > 0 ? `ACTIVE AGENT SKILLS & AUDIT PLAYBOOKS:\n${skillsContext}\n` : ''}
 
 Guidelines:
 - Provide sharp, institutional-grade, data-driven analysis formatted in clean GitHub Markdown.
+- If a valuation report has already been generated above, cite its exact numbers, valuation cases, and findings directly.
 - If asked about valuation, refer to the precedent transaction multiples, debt adjustments, and growth/margin quality.
 - If Knowledge Base or Skill files are provided, ground your reasoning and citations directly in them.
 - Use clear bullet points, bold key figures, and format mini tables if comparative data is requested.

@@ -237,6 +237,38 @@ export default function Home() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
+  // Active workflow tab state (shared with navbar and MarketBriefView)
+  const [activeTab, setActiveTab] = useState('analysis');
+
+  // Global keyboard shortcuts (Cmd/Ctrl + 1-4 for tabs, Cmd/Ctrl + K for tools)
+  useEffect(() => {
+    function handleKeyDown(event) {
+      const activeTag = document.activeElement?.tagName;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag)) return;
+
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey) {
+        if (event.key === '1') {
+          event.preventDefault();
+          setActiveTab('analysis');
+        } else if (event.key === '2') {
+          event.preventDefault();
+          setActiveTab('comps');
+        } else if (event.key === '3') {
+          event.preventDefault();
+          setActiveTab('brief');
+        } else if (event.key === '4') {
+          event.preventDefault();
+          setActiveTab('chat');
+        } else if (event.key.toLowerCase() === 'k') {
+          event.preventDefault();
+          setIsDropdownOpen(prev => !prev);
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -440,16 +472,33 @@ export default function Home() {
             <div className="shadcn-brand-icon">
               <Sparkles size={14} />
             </div>
-            <span>MarketBrief</span>
+            <div className="brand-text-group">
+              <span className="brand-name">Right to Win</span>
+              <span className="brand-tag">DealBrief AI</span>
+            </div>
           </div>
 
-          <nav className="shadcn-nav-center">
-            <span className="shadcn-nav-link active">Deal Intelligence</span>
-            <span className="shadcn-nav-link">Precedent Comps</span>
-            <span className="shadcn-nav-link">Valuation Engine</span>
-          </nav>
 
           <div className="shadcn-nav-actions">
+            {/* AI Provider Status Chip */}
+            <button
+              type="button"
+              className="btn btn-outline btn-sm nav-model-pill"
+              onClick={() => setIsApiKeyModalOpen(true)}
+              title={`Active AI: ${activeProviderLabel} (${activeModel || 'Default'}). Click to switch provider or enter keys.`}
+            >
+              <span
+                className="status-dot-pulse"
+                style={{
+                  backgroundColor: hasActiveKey ? '#10b981' : '#f59e0b'
+                }}
+              />
+              <span className="nav-model-name">{activeProviderLabel}</span>
+              <span className={`badge ${hasActiveKey ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '0.625rem', padding: '0.05rem 0.35rem' }}>
+                {hasActiveKey ? 'Live AI' : 'Offline'}
+              </span>
+            </button>
+
             {/* Unified Dropdown Menu */}
             <div className="dropdown-wrapper" ref={dropdownRef}>
               <button
@@ -635,6 +684,8 @@ export default function Home() {
         onOpenKnowledgeBaseModal={() => setIsKbModalOpen(true)}
         onOpenSkillsModal={() => setIsSkillsModalOpen(true)}
         onOpenLayoutsModal={() => setIsLayoutsModalOpen(true)}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
       />
 
       {/* Settings Dialog */}
